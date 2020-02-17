@@ -3,10 +3,10 @@ package devicemanager
 import (
 	"container/list"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
-	"strconv"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -15,7 +15,8 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/klog"
 
-	kubesharev1 "github.com/lsalab-git/KubeShare/pkg/apis/kubeshare/v1"
+	kubesharev1 "github.com/NTHU-LSALAB/KubeShare/pkg/apis/kubeshare/v1"
+	"github.com/NTHU-LSALAB/KubeShare/pkg/lib/bitmap"
 )
 
 var (
@@ -27,6 +28,7 @@ type PodRequest struct {
 	Request float64
 	Limit   float64
 	Memory  int64
+	PodManagerPort int
 }
 
 type GPUInfo struct {
@@ -36,27 +38,27 @@ type GPUInfo struct {
 	PodList *list.List
 }
 
-type NodeClient struct {
+type NodeInfo struct {
 	// GPUID -> GPU
 	GPUID2GPU map[string]*GPUInfo
 	// UUID -> Port (string)
 	UUID2Port map[string]string
+
+	// port in use
+	PodManagerPortBitmap bitmap.Bitmap
+	PodIP string
 }
 
 var (
-	nodeClients    map[string]*NodeClient
-	nodeClientsMux sync.Mutex
+	nodesInfo    map[string]*NodeInfo = make(map[string]*NodeInfo)
+	nodesInfoMux sync.Mutex
 )
 
-func init() {
-	nodeClients = make(map[string]*NodeClient)
-}
-
-func (c *Controller) initNodeClient() error {
+func (c *Controller) initNodesInfo() error {
 	var pods []*corev1.Pod
 	var sharepods []*kubesharev1.SharePod
 	var err error
-	
+
 	dummyPodsLabel := labels.SelectorFromSet(labels.Set{KubeShareRole: "dummyPod"})
 	if pods, err = c.podsLister.Pods("kube-system").List(dummyPodsLabel); err != nil {
 		errrr := fmt.Errorf("Error when list Pods: %s", err)
@@ -69,8 +71,8 @@ func (c *Controller) initNodeClient() error {
 		return errrr
 	}
 
-	nodeClientsMux.Lock()
-	defer nodeClientsMux.Unlock()
+	nodesInfoMux.Lock()
+	defer nodesInfoMux.Unlock()
 
 	for _, pod := range pods {
 		GPUID := ""
@@ -80,17 +82,20 @@ func (c *Controller) initNodeClient() error {
 		} else {
 			GPUID = gpuid
 		}
-		if node, ok := nodeClients[pod.Spec.NodeName]; !ok {
-			node = &NodeClient{
+		if node, ok := nodesInfo[pod.Spec.NodeName]; !ok {
+			bm := &bitmap.Bitmap64{}
+			bm.Mask(0)
+			node = &NodeInfo{
 				GPUID2GPU: make(map[string]*GPUInfo),
+				PodManagerPortBitmap: bm,
 			}
 			node.GPUID2GPU[GPUID] = &GPUInfo{
-				UUID: "",
-				Usage: 0.0,
-				Mem: 0,
+				UUID:    "",
+				Usage:   0.0,
+				Mem:     0,
 				PodList: list.New(),
 			}
-			nodeClients[pod.Spec.NodeName] = node
+			nodesInfo[pod.Spec.NodeName] = node
 		} else {
 			_, ok := node.GPUID2GPU[GPUID]
 			if ok {
@@ -98,9 +103,9 @@ func (c *Controller) initNodeClient() error {
 				continue
 			}
 			node.GPUID2GPU[GPUID] = &GPUInfo{
-				UUID: "",
-				Usage: 0.0,
-				Mem: 0,
+				UUID:    "",
+				Usage:   0.0,
+				Mem:     0,
 				PodList: list.New(),
 			}
 		}
@@ -108,7 +113,7 @@ func (c *Controller) initNodeClient() error {
 
 	type processDummyPodLaterItem struct {
 		NodeName string
-		GPUID string
+		GPUID    string
 	}
 	var processDummyPodLaterList []processDummyPodLaterItem
 
@@ -145,7 +150,7 @@ func (c *Controller) initNodeClient() error {
 			GPUID = gpuid
 		}
 
-		node, ok := nodeClients[sharepod.Spec.NodeName]
+		node, ok := nodesInfo[sharepod.Spec.NodeName]
 		if !ok {
 			klog.Errorf("SharePod '%s/%s' doesn't have corresponding dummy Pod!", sharepod.ObjectMeta.Namespace, sharepod.ObjectMeta.Name)
 			continue
@@ -163,8 +168,10 @@ func (c *Controller) initNodeClient() error {
 			Request: gpu_request,
 			Limit:   gpu_limit,
 			Memory:  gpu_mem,
+			PodManagerPort: sharepod.Status.PodManagerPort,
 		})
-		
+		node.PodManagerPortBitmap.Mask(sharepod.Status.PodManagerPort - PodManagerPortStart)
+
 		if sharepod.Status.BoundDeviceID != "" {
 			if gpu.UUID == "" {
 				gpu.UUID = sharepod.Status.BoundDeviceID
@@ -182,7 +189,7 @@ func (c *Controller) initNodeClient() error {
 				if notFound {
 					processDummyPodLaterList = append(processDummyPodLaterList, processDummyPodLaterItem{
 						NodeName: sharepod.Spec.NodeName,
-						GPUID: GPUID,
+						GPUID:    GPUID,
 					})
 				}
 			}
@@ -197,26 +204,26 @@ func (c *Controller) initNodeClient() error {
 }
 
 func (c *Controller) cleanOrphanDummyPod() {
-	nodeClientsMux.Lock()
-	defer nodeClientsMux.Unlock()
+	nodesInfoMux.Lock()
+	defer nodesInfoMux.Unlock()
 
-	for nodeName, node := range nodeClients {
+	for nodeName, node := range nodesInfo {
 		for gpuid, gpu := range node.GPUID2GPU {
 			if gpu.PodList.Len() == 0 {
 				delete(node.GPUID2GPU, gpuid)
-				c.deleteDummyPod(nodeName, gpuid)
+				c.deleteDummyPod(nodeName, gpuid, gpu.UUID)
 			}
 		}
 	}
 }
 
-func FindInQueue(key string, pl *list.List) bool {
+func FindInQueue(key string, pl *list.List) (*PodRequest, bool) {
 	for k := pl.Front(); k != nil; k = k.Next() {
 		if k.Value.(*PodRequest).Key == key {
-			return true
+			return k.Value.(*PodRequest), true
 		}
 	}
-	return false
+	return nil, false
 }
 
 /* getPhysicalGPUuuid returns valid uuid if errCode==0
@@ -225,16 +232,16 @@ func FindInQueue(key string, pl *list.List) bool {
  * errCode 2: resource exceed
  * errCode 255: other error
  */
-func (c *Controller) getPhysicalGPUuuid(nodeName string, GPUID string, gpu_request, gpu_limit float64, gpu_mem int64, key string) (uuid, port string, errCode int) {
+func (c *Controller) getPhysicalGPUuuid(nodeName string, GPUID string, gpu_request, gpu_limit float64, gpu_mem int64, key string, port *int) (uuid string, errCode int) {
 
-	nodeClientsMux.Lock()
-	defer nodeClientsMux.Unlock()
+	nodesInfoMux.Lock()
+	defer nodesInfoMux.Unlock()
 
-	node, ok := nodeClients[nodeName]
+	node, ok := nodesInfo[nodeName]
 	if !ok {
 		msg := fmt.Sprintf("No client node: %s", nodeName)
 		klog.Errorf(msg)
-		return "", "", 255
+		return "", 255
 	}
 
 	if gpu, ok := node.GPUID2GPU[GPUID]; !ok {
@@ -244,41 +251,46 @@ func (c *Controller) getPhysicalGPUuuid(nodeName string, GPUID string, gpu_reque
 			Mem:     gpu_mem,
 			PodList: list.New(),
 		}
+		*port = node.PodManagerPortBitmap.FindNextAndSet() + PodManagerPortStart
 		gpu.PodList.PushBack(&PodRequest{
 			Key:     key,
 			Request: gpu_request,
 			Limit:   gpu_limit,
 			Memory:  gpu_mem,
+			PodManagerPort: *port,
 		})
 		node.GPUID2GPU[GPUID] = gpu
 		go c.createDummyPod(nodeName, GPUID)
-		syncConfig(nodeName, GPUID, gpu.PodList)
-		return "", "", 1
+		return "", 1
 	} else {
-		if !FindInQueue(key, gpu.PodList) {
+		if podreq, isFound := FindInQueue(key, gpu.PodList); !isFound {
 			if tmp := gpu.Usage + gpu_request; tmp > 1.0 {
 				klog.Infof("Resource exceed, usage: %f, new_req: %f", gpu.Usage, gpu_request)
-				return "", "", 2
+				return "", 2
 			} else {
 				gpu.Usage = tmp
 			}
 			gpu.Mem += gpu_mem
+			*port = node.PodManagerPortBitmap.FindNextAndSet() + PodManagerPortStart
 			gpu.PodList.PushBack(&PodRequest{
 				Key:     key,
 				Request: gpu_request,
 				Limit:   gpu_limit,
 				Memory:  gpu_mem,
+				PodManagerPort: *port,
 			})
-			syncConfig(nodeName, GPUID, gpu.PodList)
+		} else {
+			*port = podreq.PodManagerPort
 		}
 		if gpu.UUID == "" {
-			return "", "", 1
+			return "", 1
 		} else {
-			return gpu.UUID, node.UUID2Port[gpu.UUID], 0
+			syncConfig(nodeName, gpu.UUID, gpu.PodList)
+			return gpu.UUID, 0
 		}
 	}
 
-	return "", "", 255
+	return "", 255
 }
 
 func (c *Controller) createDummyPod(nodeName string, GPUID string) error {
@@ -292,8 +304,8 @@ func (c *Controller) createDummyPod(nodeName string, GPUID string) error {
 				Name:      podName,
 				Namespace: "kube-system",
 				Labels: map[string]string{
-					KubeShareRole:  "dummyPod",
-					KubeShareNodeName:  nodeName,
+					KubeShareRole:          "dummyPod",
+					KubeShareNodeName:      nodeName,
 					KubeShareResourceGPUID: GPUID,
 				},
 			},
@@ -303,7 +315,7 @@ func (c *Controller) createDummyPod(nodeName string, GPUID string) error {
 				Containers: []corev1.Container{
 					corev1.Container{
 						Name:  "sleepforever",
-						Image: "ncy9371/nvidia-get-uuid:191130",
+						Image: "ncy9371/kubeshare-vgpupod:200217232846",
 						Resources: corev1.ResourceRequirements{
 							Requests: corev1.ResourceList{ResourceNVIDIAGPU: ResourceQuantity1},
 							Limits:   corev1.ResourceList{ResourceNVIDIAGPU: ResourceQuantity1},
@@ -326,9 +338,9 @@ func (c *Controller) createDummyPod(nodeName string, GPUID string) error {
 	if dummypod, err := c.kubeclientset.CoreV1().Pods("kube-system").Get(podName, metav1.GetOptions{}); err != nil {
 		if errors.IsNotFound(err) {
 			havetocreate := true
-			nodeClientsMux.Lock()
-			_, havetocreate = nodeClients[nodeName].GPUID2GPU[GPUID]
-			nodeClientsMux.Unlock()
+			nodesInfoMux.Lock()
+			_, havetocreate = nodesInfo[nodeName].GPUID2GPU[GPUID]
+			nodesInfoMux.Unlock()
 			if havetocreate {
 				createit()
 			}
@@ -372,7 +384,7 @@ func (c *Controller) getAndSetUUIDFromDummyPod(nodeName, GPUID, podName string, 
 	uuid = strings.Trim(string(rawlog), " \n\t")
 	klog.Infof("Dummy Pod %s get device ID: '%s'", podName, uuid)
 	isFound := false
-	for id := range nodeClients[nodeName].UUID2Port {
+	for id := range nodesInfo[nodeName].UUID2Port {
 		if id == uuid {
 			isFound = true
 		}
@@ -387,12 +399,12 @@ func (c *Controller) getAndSetUUIDFromDummyPod(nodeName, GPUID, podName string, 
 		return err
 	}
 
-	nodeClientsMux.Lock()
-	defer nodeClientsMux.Unlock()
+	nodesInfoMux.Lock()
+	defer nodesInfoMux.Unlock()
 
-	nodeClients[nodeName].GPUID2GPU[GPUID].UUID = uuid
+	nodesInfo[nodeName].GPUID2GPU[GPUID].UUID = uuid
 
-	PodList := nodeClients[nodeName].GPUID2GPU[GPUID].PodList
+	PodList := nodesInfo[nodeName].GPUID2GPU[GPUID].PodList
 	klog.Infof("After dummy Pod created, PodList Len: %d", PodList.Len())
 	for k := PodList.Front(); k != nil; k = k.Next() {
 		klog.Infof("Add MtgpuPod back to queue then process: %s", k.Value)
@@ -407,9 +419,9 @@ func (c *Controller) removeSharePodFromList(sharepod *kubesharev1.SharePod) {
 	GPUID := sharepod.Annotations[KubeShareResourceGPUID]
 	key := fmt.Sprintf("%s/%s", sharepod.ObjectMeta.Namespace, sharepod.ObjectMeta.Name)
 
-	nodeClientsMux.Lock()
+	nodesInfoMux.Lock()
 
-	if node, nodeOk := nodeClients[nodeName]; nodeOk {
+	if node, nodeOk := nodesInfo[nodeName]; nodeOk {
 		if gpu, gpuOk := node.GPUID2GPU[GPUID]; gpuOk {
 			podlist := gpu.PodList
 			for pod := podlist.Front(); pod != nil; pod = pod.Next() {
@@ -417,32 +429,36 @@ func (c *Controller) removeSharePodFromList(sharepod *kubesharev1.SharePod) {
 				if podRequest.Key == key {
 					klog.Infof("Remove MtgpuPod %s from list, remaining %d MtgpuPod(s).", key, podlist.Len())
 					podlist.Remove(pod)
+					
+					uuid := gpu.UUID
 					remove := false
+
 					if podlist.Len() == 0 {
 						delete(node.GPUID2GPU, GPUID)
 						remove = true
 					} else {
 						gpu.Usage -= podRequest.Request
 						gpu.Mem -= podRequest.Memory
-						syncConfig(nodeName, GPUID, podlist)
+						syncConfig(nodeName, uuid, podlist)
 					}
+					node.PodManagerPortBitmap.Unmask(podRequest.PodManagerPort - PodManagerPortStart)
 
-					nodeClientsMux.Unlock()
+					nodesInfoMux.Unlock()
 
 					if remove {
-						c.deleteDummyPod(nodeName, GPUID)
+						c.deleteDummyPod(nodeName, GPUID, uuid)
 					}
 					return
 				}
 			}
 		}
 	}
-	nodeClientsMux.Unlock()
+	nodesInfoMux.Unlock()
 }
 
-func (c *Controller) deleteDummyPod(nodeName, GPUID string) {
+func (c *Controller) deleteDummyPod(nodeName, GPUID, uuid string) {
 	key := fmt.Sprintf("%s-%s-%s", KubeShareDummyPodName, nodeName, GPUID)
 	klog.Infof("Deleting dummy Pod: %s", key)
 	c.kubeclientset.CoreV1().Pods("kube-system").Delete(key, &metav1.DeleteOptions{})
-	delConfig(nodeName, GPUID)
+	syncConfig(nodeName, uuid, nil)
 }

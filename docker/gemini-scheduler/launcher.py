@@ -1,0 +1,100 @@
+import argparse
+import inotify.adapters
+import os
+import sys
+import signal
+import shlex
+import subprocess as sp
+import time
+
+args = None
+podlist = {}
+
+def prepare_env(name, port, schd_port):
+    client_env = os.environ.copy()
+    client_env['SCHEDULER_IP'] = '127.0.0.1'
+    client_env['SCHEDULER_PORT'] = str(schd_port)
+    client_env['POD_MANAGER_IP'] = '0.0.0.0'
+    client_env['POD_MANAGER_PORT'] = str(port)
+    client_env['POD_NAME'] = name
+    return client_env
+
+def launch_scheduler():
+    cfg_h, cfg_t = os.path.split(args.pod_list)
+    if cfg_h == '':
+        cfg_h = os.getcwd()
+
+    cmd = "{} -p {} -f {} -P {} -q {} -m {} -w {}".format(
+        args.schd, cfg_h, cfg_t, args.port, args.base_quota, args.min_quota, args.window
+    )
+    proc = sp.Popen(shlex.split(cmd), universal_newlines=True, bufsize=1)
+    return proc
+
+def update_podmanager(file):
+    with open(file) as f:
+        lines = f.readlines()
+    podnum = int(lines[0])
+    for n in podlist:
+        podlist[n][1] = False
+    for i in range(1, podnum+1):
+        name, port = lines[i].split()
+        if name not in podlist:
+            sys.stderr.write("[launcher] pod manager id '{}' port '{}' start running\n".format(name, port))
+            sys.stderr.flush()
+            time.sleep(0.5)
+            proc = sp.Popen(
+                shlex.split(args.pmgr),
+                env=prepare_env(name, port, args.port),
+                preexec_fn=os.setpgrp,
+            )
+            podlist[name] = [proc, True]
+        else:
+            podlist[name][1] = True
+    del_list = []
+    for n in podlist:
+        if not podlist[n][1]:
+            os.killpg(os.getpgid(podlist[n][0].pid), signal.SIGKILL)
+            podlist[n][0].wait()
+            sys.stderr.write("[launcher] pod manager id '{}' has been deleted\n".format(n))
+            sys.stderr.flush()
+            del_list.append(n)
+    for n in del_list:
+        del podlist[n]
+
+def main():
+    global args
+    parser = argparse.ArgumentParser()
+    parser.add_argument('schd', help='path to scheduler executable')
+    parser.add_argument('pmgr', help='path to pod-manager executable')
+    parser.add_argument('gpu_uuid', help='scheduling system GPU UUID')
+    parser.add_argument('pod_list', help='path to pod list file')
+    parser.add_argument('pmgr_port_dir', help='path to pod port dir')
+    parser.add_argument('--port', type=int, default=49901, help='base port')
+    parser.add_argument('--base_quota', type=float, default=300, help='base quota (ms)')
+    parser.add_argument('--min_quota', type=float, default=20, help='minimum quota (ms)')
+    parser.add_argument('--window', type=float, default=10000, help='time window (ms)')
+    args = parser.parse_args()
+
+    launch_scheduler()
+    sys.stderr.write(f"[launcher] scheduler started on 0.0.0.0:{args.port}\n")
+    sys.stderr.flush()
+
+    ino = inotify.adapters.Inotify()
+    ino.add_watch(args.pmgr_port_dir, inotify.constants.IN_CLOSE_WRITE)
+    for event in ino.event_gen(yield_nones=False):
+        (_, type_names, path, filename) = event
+        # print("PATH=[{}] FILENAME=[{}] EVENT_TYPES={}".format(path, filename, type_names))
+        if filename == args.gpu_uuid:
+            update_podmanager(os.path.join(args.pmgr_port_dir, args.gpu_uuid))
+
+if __name__ == '__main__':
+    os.setpgrp()
+    try:
+        main()
+    except:
+        sys.stderr.write("Catch exception: {}\n".format(sys.exc_info()[0]))
+        sys.stderr.flush()
+    finally:
+        for n in podlist:
+            os.killpg(os.getpgid(podlist[n][0].pid), signal.SIGKILL)
+        os.killpg(0, signal.SIGKILL)

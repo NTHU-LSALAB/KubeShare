@@ -19,8 +19,8 @@ limitations under the License.
 package kubeshare
 
 import (
-	internalinterfaces "github.com/lsalab-git/KubeShare/pkg/client/informers/externalversions/internalinterfaces"
-	v1 "github.com/lsalab-git/KubeShare/pkg/client/informers/externalversions/kubeshare/v1"
+	internalinterfaces "github.com/NTHU-LSALAB/KubeShare/pkg/client/informers/externalversions/internalinterfaces"
+	v1 "github.com/NTHU-LSALAB/KubeShare/pkg/client/informers/externalversions/kubeshare/v1"
 )
 
 // Interface provides access to each of this group's versions.

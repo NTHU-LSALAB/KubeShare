@@ -16,24 +16,11 @@ import (
 
 const (
 	SchedulerIpPath = "/kubeshare/library/schedulerIP.txt"
-	SchedulerGPULimitPath = "/kubeshare/scheduler/GPU_limit.txt"
+	SchedulerGPUConfigPath = "/kubeshare/scheduler/config/"
+	SchedulerGPUPodManagerPortPath = "/kubeshare/scheduler/podmanagerport/"
 
 	SchedulerPodIpEnvName = "KUBESHARE_SCHEDULER_IP"
 )
-
-var (
-	// GPUID => pods request string
-	requests map[string]*requestData
-)
-
-type requestData struct {
-	RequestStr string
-	Num        int
-}
-
-func init() {
-	requests = make(map[string]*requestData)
-}
 
 func Run(server string) {
 	f, err := os.Create(SchedulerIpPath)
@@ -43,6 +30,9 @@ func Run(server string) {
 	f.WriteString(os.Getenv(SchedulerPodIpEnvName) + "\n")
 	f.Sync()
 	f.Close()
+
+	os.MkdirAll(SchedulerGPUConfigPath, os.ModePerm)
+	os.MkdirAll(SchedulerGPUPodManagerPortPath, os.ModePerm)
 
 	hostname, err := os.Hostname()
 	if err != nil {
@@ -105,60 +95,34 @@ func recvRequest(reader *bufio.Reader) {
 func handleRequest(r string) {
 	klog.Infof("Receive request: %s", r)
 
-	getGPUID := func(s string) (GPUID, pods string, err error) {
-		GPUID_POS_END := 0
-		for pos, char := range s[4:] {
-			if char == ':' {
-				GPUID_POS_END = pos
-			}
-		}
-		if GPUID_POS_END == 0 {
-			err = fmt.Errorf("Error format of receiving message: %s", r)
-			klog.Error(err)
-			return "", "", err
-		}
-		GPUID = s[4 : GPUID_POS_END+4]
-		return GPUID, s[GPUID_POS_END+5:], nil
-	}
-
-	if r[:4] == "ADD:" { // "ADD:GPUID:"
-		if GPUID, r, err := getGPUID(r); err != nil {
-			return
-		} else {
-			requests[GPUID] = &requestData{
-				RequestStr: strings.ReplaceAll(r, ",", "\n"),
-				Num:        strings.Count(r, ","),
-			}
-		}
-	} else if r[:4] == "DEL:" { // "DEL:GPUID:"
-		if GPUID, _, err := getGPUID(r); err != nil {
-			return
-		} else {
-			// it's ok to delete a non-exist key
-			delete(requests, GPUID)
-		}
-	} else {
-		klog.Errorf("Error format of receiving message: %s", r)
+	req_arr := strings.Split(r, ":")
+	if len(req_arr) != 3 {
+		klog.Errorf("Error fmat of receiving message: %s", r)
 		return
 	}
 
-	f, err := os.Create(SchedulerGPULimitPath)
+	UUID, podlist, portmap := req_arr[0], req_arr[1], req_arr[2]
+
+	gpu_config_f, err := os.Create(SchedulerGPUConfigPath + UUID)
 	if err != nil {
-		klog.Errorf("Error when create config file on path: %s", SchedulerGPULimitPath)
+		klog.Errorf("Error when create config file on path: %s", SchedulerGPUConfigPath + UUID)
 	}
-	defer f.Close()
-
-	num := 0
-	for _, data := range requests {
-		num += data.Num
-	}
-	f.WriteString(fmt.Sprintf("%d", num) + "\n")
-
-	for _, data := range requests {
-		f.WriteString(data.RequestStr)
+	
+	podmanager_port_f, err := os.Create(SchedulerGPUPodManagerPortPath + UUID)
+	if err != nil {
+		klog.Errorf("Error when create config file on path: %s", SchedulerGPUPodManagerPortPath + UUID)
 	}
 
-	f.Sync()
+	gpu_config_f.WriteString(fmt.Sprintf("%d\n", strings.Count(podlist, ",")))
+	gpu_config_f.WriteString(strings.ReplaceAll(podlist, ",", "\n"))
+
+	podmanager_port_f.WriteString(fmt.Sprintf("%d\n", strings.Count(portmap, ",")))
+	podmanager_port_f.WriteString(strings.ReplaceAll(portmap, ",", "\n"))
+
+	gpu_config_f.Sync()
+	podmanager_port_f.Sync()
+	gpu_config_f.Close()
+	podmanager_port_f.Close()
 }
 
 func sendHeartbeat(conn net.Conn, tick <-chan time.Time) error {

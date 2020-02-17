@@ -1,4 +1,4 @@
-./generate-groups.sh all \
-github.com/lsalab-git/KubeShare/pkg/client \
-github.com/lsalab-git/KubeShare/pkg/apis \
+GO111MODULE=off ./generate-groups.sh all \
+github.com/NTHU-LSALAB/KubeShare/pkg/client \
+github.com/NTHU-LSALAB/KubeShare/pkg/apis \
 kubeshare:v1

@@ -21,7 +21,7 @@ package versioned
 import (
 	"fmt"
 
-	kubesharev1 "github.com/lsalab-git/KubeShare/pkg/client/clientset/versioned/typed/kubeshare/v1"
+	kubesharev1 "github.com/NTHU-LSALAB/KubeShare/pkg/client/clientset/versioned/typed/kubeshare/v1"
 	discovery "k8s.io/client-go/discovery"
 	rest "k8s.io/client-go/rest"
 	flowcontrol "k8s.io/client-go/util/flowcontrol"

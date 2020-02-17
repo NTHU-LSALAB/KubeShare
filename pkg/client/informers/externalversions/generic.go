@@ -21,7 +21,7 @@ package externalversions
 import (
 	"fmt"
 
-	v1 "github.com/lsalab-git/KubeShare/pkg/apis/kubeshare/v1"
+	v1 "github.com/NTHU-LSALAB/KubeShare/pkg/apis/kubeshare/v1"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	cache "k8s.io/client-go/tools/cache"
 )

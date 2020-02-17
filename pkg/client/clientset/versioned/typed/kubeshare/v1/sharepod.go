@@ -21,8 +21,8 @@ package v1
 import (
 	"time"
 
-	v1 "github.com/lsalab-git/KubeShare/pkg/apis/kubeshare/v1"
-	scheme "github.com/lsalab-git/KubeShare/pkg/client/clientset/versioned/scheme"
+	v1 "github.com/NTHU-LSALAB/KubeShare/pkg/apis/kubeshare/v1"
+	scheme "github.com/NTHU-LSALAB/KubeShare/pkg/client/clientset/versioned/scheme"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"

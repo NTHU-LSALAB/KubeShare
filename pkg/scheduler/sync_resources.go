@@ -8,8 +8,8 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog"
-	kubesharev1 "github.com/lsalab-git/KubeShare/pkg/apis/kubeshare/v1"
-	resourcetype "github.com/lsalab-git/KubeShare/pkg/devicemanager"
+	kubesharev1 "github.com/NTHU-LSALAB/KubeShare/pkg/apis/kubeshare/v1"
+	resourcetype "github.com/NTHU-LSALAB/KubeShare/pkg/devicemanager"
 )
 
 func syncClusterResources(nodeList []*corev1.Node, podList []*corev1.Pod, sharePodList []*kubesharev1.SharePod) (nodeResources NodeResources) {
