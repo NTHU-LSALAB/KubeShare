@@ -19,9 +19,9 @@ limitations under the License.
 package fake
 
 import (
-	clientset "github.com/lsalab-git/KubeShare/pkg/client/clientset/versioned"
-	kubesharev1 "github.com/lsalab-git/KubeShare/pkg/client/clientset/versioned/typed/kubeshare/v1"
-	fakekubesharev1 "github.com/lsalab-git/KubeShare/pkg/client/clientset/versioned/typed/kubeshare/v1/fake"
+	clientset "github.com/NTHU-LSALAB/KubeShare/pkg/client/clientset/versioned"
+	kubesharev1 "github.com/NTHU-LSALAB/KubeShare/pkg/client/clientset/versioned/typed/kubeshare/v1"
+	fakekubesharev1 "github.com/NTHU-LSALAB/KubeShare/pkg/client/clientset/versioned/typed/kubeshare/v1/fake"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/discovery"

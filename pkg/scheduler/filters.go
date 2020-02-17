@@ -1,7 +1,7 @@
 package scheduler
 
 import (
-	kubesharev1 "github.com/lsalab-git/KubeShare/pkg/apis/kubeshare/v1"
+	kubesharev1 "github.com/NTHU-LSALAB/KubeShare/pkg/apis/kubeshare/v1"
 )
 
 var filters = []func(NodeResources, *kubesharev1.SharePod){
@@ -19,11 +19,15 @@ func GPUAffinityFilter(nodeResources NodeResources, sharepod *kubesharev1.ShareP
 	}
 	for _, nodeRes := range nodeResources {
 		for GPUID, gpuInfo := range nodeRes.GpuFree {
+			notFound := true
 			for _, gpuAffinityTag := range gpuInfo.GPUAffinityTags {
-				if affinityTag != gpuAffinityTag {
-					delete(nodeRes.GpuFree, GPUID)
+				if affinityTag == gpuAffinityTag {
+					notFound = false
 					break
 				}
+			}
+			if notFound {
+				delete(nodeRes.GpuFree, GPUID)
 			}
 		}
 	}
@@ -36,6 +40,10 @@ func GPUExclusionFilter(nodeResources NodeResources, sharepod *kubesharev1.Share
 	}
 	for _, nodeRes := range nodeResources {
 		for GPUID, gpuInfo := range nodeRes.GpuFree {
+			if exclusionTag != "" && len(gpuInfo.GPUExclusionTags) == 0 {
+				delete(nodeRes.GpuFree, GPUID)
+				break
+			}
 			// len(gpuInfo.GPUExclusionTags) should be only one
 			for _, gpuExclusionTag := range gpuInfo.GPUExclusionTags {
 				if exclusionTag != gpuExclusionTag {

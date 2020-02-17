@@ -21,10 +21,10 @@ package v1
 import (
 	time "time"
 
-	kubesharev1 "github.com/lsalab-git/KubeShare/pkg/apis/kubeshare/v1"
-	versioned "github.com/lsalab-git/KubeShare/pkg/client/clientset/versioned"
-	internalinterfaces "github.com/lsalab-git/KubeShare/pkg/client/informers/externalversions/internalinterfaces"
-	v1 "github.com/lsalab-git/KubeShare/pkg/client/listers/kubeshare/v1"
+	kubesharev1 "github.com/NTHU-LSALAB/KubeShare/pkg/apis/kubeshare/v1"
+	versioned "github.com/NTHU-LSALAB/KubeShare/pkg/client/clientset/versioned"
+	internalinterfaces "github.com/NTHU-LSALAB/KubeShare/pkg/client/informers/externalversions/internalinterfaces"
+	v1 "github.com/NTHU-LSALAB/KubeShare/pkg/client/listers/kubeshare/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"

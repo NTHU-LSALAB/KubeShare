@@ -19,7 +19,7 @@ limitations under the License.
 package fake
 
 import (
-	kubesharev1 "github.com/lsalab-git/KubeShare/pkg/apis/kubeshare/v1"
+	kubesharev1 "github.com/NTHU-LSALAB/KubeShare/pkg/apis/kubeshare/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"

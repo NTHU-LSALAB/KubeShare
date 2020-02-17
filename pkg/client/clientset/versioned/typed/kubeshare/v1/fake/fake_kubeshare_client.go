@@ -19,7 +19,7 @@ limitations under the License.
 package fake
 
 import (
-	v1 "github.com/lsalab-git/KubeShare/pkg/client/clientset/versioned/typed/kubeshare/v1"
+	v1 "github.com/NTHU-LSALAB/KubeShare/pkg/client/clientset/versioned/typed/kubeshare/v1"
 	rest "k8s.io/client-go/rest"
 	testing "k8s.io/client-go/testing"
 )

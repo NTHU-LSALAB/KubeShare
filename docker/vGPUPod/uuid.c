@@ -1,6 +1,7 @@
 #include <nvml.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <unistd.h>
 
 #define TO_STRING(str) #str
 #define CALL_NVML_SUCCESS_FUNC(func, args...) \
@@ -23,7 +24,10 @@ int main(int argc, char *argv[]) {
         CALL_NVML_SUCCESS_FUNC(nvmlDeviceGetHandleByIndex, i, &deviceHandle)
         CALL_NVML_SUCCESS_FUNC(nvmlDeviceGetUUID, deviceHandle, UUID, 10240);
         printf("%s\n", UUID);
+        fflush(stdout);
     }
 
     CALL_NVML_SUCCESS_FUNC(nvmlShutdown)
+
+    pause();
 }

@@ -60,6 +60,7 @@ type SharePodStatus struct {
 	PodStatus     *corev1.PodStatus
 	PodObjectMeta *metav1.ObjectMeta
 	BoundDeviceID string
+	PodManagerPort int
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

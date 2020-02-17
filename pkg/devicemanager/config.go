@@ -16,6 +16,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog"
+
+	"github.com/NTHU-LSALAB/KubeShare/pkg/lib/bitmap"
 )
 
 type ClientStatus string
@@ -88,6 +90,8 @@ func clientHandler(conn net.Conn) {
 		hostname = tmp[1][:len(tmp[1])-1]
 	}
 
+	podIP := strings.Split(conn.RemoteAddr().String(), ":")[0]
+
 	nodeName := ""
 	pod, err := kubeClient.CoreV1().Pods("kube-system").Get(hostname, metav1.GetOptions{})
 	if errors.IsNotFound(err) {
@@ -118,17 +122,21 @@ func clientHandler(conn net.Conn) {
 		port += 1
 	}
 
-	nodeClientsMux.Lock()
-	if node, ok := nodeClients[nodeName]; !ok {
-		nodeClients[nodeName] = &NodeClient{
-			GPUID2GPU: make(map[string]*GPUInfo),
-			UUID2Port: uuid2port,
+	nodesInfoMux.Lock()
+	if node, ok := nodesInfo[nodeName]; !ok {
+		bm := &bitmap.Bitmap64{}
+		bm.Mask(0)
+		nodesInfo[nodeName] = &NodeInfo{
+			GPUID2GPU:            make(map[string]*GPUInfo),
+			UUID2Port:            uuid2port,
+			PodIP:                podIP,
+			PodManagerPortBitmap: bm,
 		}
 	} else {
-		// node.GPUID2GPU = make(map[string]*GPUInfo)
 		node.UUID2Port = uuid2port
+		node.PodIP = podIP
 	}
-	nodeClientsMux.Unlock()
+	nodesInfoMux.Unlock()
 
 	nodeStatusMux.Lock()
 	if _, ok := nodeStatus[nodeName]; ok {
@@ -148,11 +156,11 @@ func clientHandler(conn net.Conn) {
 
 	UpdateNodeGPUInfo(nodeName, &uuid2mem)
 
-	nodeClientsMux.Lock()
-	for gpuid, gpuinfo := range nodeClients[nodeName].GPUID2GPU {
-		syncConfig(nodeName, gpuid, gpuinfo.PodList)
+	nodesInfoMux.Lock()
+	for _, gpuinfo := range nodesInfo[nodeName].GPUID2GPU {
+		syncConfig(nodeName, gpuinfo.UUID, gpuinfo.PodList)
 	}
-	nodeClientsMux.Unlock()
+	nodesInfoMux.Unlock()
 
 	for {
 		isError := false
@@ -220,7 +228,7 @@ func periodicallyCheckHeartbeats(tick <-chan time.Time) {
 	}
 }
 
-func syncConfig(nodeName, GPUID string, podList *list.List) error {
+func syncConfig(nodeName, UUID string, podList *list.List) error {
 	nodeStatusMux.Lock()
 	client, ok := nodeStatus[nodeName]
 	nodeStatusMux.Unlock()
@@ -238,54 +246,34 @@ func syncConfig(nodeName, GPUID string, podList *list.List) error {
 
 	var buf bytes.Buffer
 
-	buf.WriteString("ADD:")
-	buf.WriteString(GPUID)
+	buf.WriteString(UUID)
 	buf.WriteString(":")
 
-	for pod := podList.Front(); pod != nil; pod = pod.Next() {
-		buf.WriteString(pod.Value.(*PodRequest).Key)
-		buf.WriteString(" ")
-		buf.WriteString(fmt.Sprintf("%f", pod.Value.(*PodRequest).Request))
-		buf.WriteString(" ")
-		buf.WriteString(fmt.Sprintf("%f", pod.Value.(*PodRequest).Limit))
-		buf.WriteString(" ")
-		buf.WriteString(fmt.Sprintf("%d", pod.Value.(*PodRequest).Memory))
-		buf.WriteString(",")
+	if podList != nil {
+		for pod := podList.Front(); pod != nil; pod = pod.Next() {
+			buf.WriteString(pod.Value.(*PodRequest).Key)
+			buf.WriteString(" ")
+			buf.WriteString(fmt.Sprintf("%f", pod.Value.(*PodRequest).Request))
+			buf.WriteString(" ")
+			buf.WriteString(fmt.Sprintf("%f", pod.Value.(*PodRequest).Limit))
+			buf.WriteString(" ")
+			buf.WriteString(fmt.Sprintf("%d", pod.Value.(*PodRequest).Memory))
+			buf.WriteString(",")
+		}
+	}
+
+	buf.WriteString(":")
+
+	if podList != nil {
+		for pod := podList.Front(); pod != nil; pod = pod.Next() {
+			buf.WriteString(pod.Value.(*PodRequest).Key)
+			buf.WriteString(" ")
+			buf.WriteString(fmt.Sprintf("%d", pod.Value.(*PodRequest).PodManagerPort))
+			buf.WriteString(",")
+		}
 	}
 
 	buf.WriteString("\n")
-
-	klog.Infof("Syncing to node '%s' with content: '%s'", nodeName, buf.String())
-	if _, err := client.Conn.Write(buf.Bytes()); err != nil {
-		msg := fmt.Sprintf("Error when write '%s' to Conn of node: %s", buf.String(), nodeName)
-		klog.Errorf(msg)
-		return fmt.Errorf(msg)
-	}
-
-	return nil
-}
-
-func delConfig(nodeName, GPUID string) error {
-	nodeStatusMux.Lock()
-	client, ok := nodeStatus[nodeName]
-	nodeStatusMux.Unlock()
-
-	if !ok {
-		msg := fmt.Sprintf("No client node: %s", nodeName)
-		klog.Errorf(msg)
-		return fmt.Errorf(msg)
-	}
-	if client.ClientStatus != ClientReady {
-		msg := fmt.Sprintf("Node status is not ready when SyncConfig(): %s", nodeName)
-		klog.Errorf(msg)
-		return fmt.Errorf(msg)
-	}
-
-	var buf bytes.Buffer
-
-	buf.WriteString("DEL:")
-	buf.WriteString(GPUID)
-	buf.WriteString(":\n")
 
 	klog.Infof("Syncing to node '%s' with content: '%s'", nodeName, buf.String())
 	if _, err := client.Conn.Write(buf.Bytes()); err != nil {
