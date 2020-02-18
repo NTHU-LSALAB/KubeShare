@@ -33,6 +33,8 @@ def launch_scheduler():
 def update_podmanager(file):
     with open(file) as f:
         lines = f.readlines()
+    if not len(lines):
+        return
     podnum = int(lines[0])
     for n in podlist:
         podlist[n][1] = False
@@ -41,7 +43,6 @@ def update_podmanager(file):
         if name not in podlist:
             sys.stderr.write("[launcher] pod manager id '{}' port '{}' start running\n".format(name, port))
             sys.stderr.flush()
-            time.sleep(0.5)
             proc = sp.Popen(
                 shlex.split(args.pmgr),
                 env=prepare_env(name, port, args.port),
@@ -83,16 +84,18 @@ def main():
     ino.add_watch(args.pmgr_port_dir, inotify.constants.IN_CLOSE_WRITE)
     for event in ino.event_gen(yield_nones=False):
         (_, type_names, path, filename) = event
-        # print("PATH=[{}] FILENAME=[{}] EVENT_TYPES={}".format(path, filename, type_names))
-        if filename == args.gpu_uuid:
-            update_podmanager(os.path.join(args.pmgr_port_dir, args.gpu_uuid))
+        try:
+            if filename == args.gpu_uuid:
+                update_podmanager(os.path.join(args.pmgr_port_dir, args.gpu_uuid))
+        except: # file content may not correct
+            pass
 
 if __name__ == '__main__':
     os.setpgrp()
     try:
         main()
     except:
-        sys.stderr.write("Catch exception: {}\n".format(sys.exc_info()[0]))
+        sys.stderr.write("Catch exception: {}\n".format(sys.exc_info()))
         sys.stderr.flush()
     finally:
         for n in podlist:
