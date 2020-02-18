@@ -1,0 +1,14 @@
+apiVersion: kubeshare.nthu/v1
+kind: SharePod
+metadata:
+  name: sharepod2
+  annotations:
+    "kubeshare/gpu_request": "0.5"
+    "kubeshare/gpu_limit": "1.0"
+    "kubeshare/gpu_mem": "3145728000"
+spec:
+  terminationGracePeriodSeconds: 0
+  containers:
+  - name: cuda
+    image: nvidia/cuda:9.0-base
+    command: ["sh", "-c", "nvidia-smi -L; sleep infinity"]
