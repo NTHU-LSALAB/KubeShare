@@ -30,6 +30,8 @@
 
 ![workflow7](workflow7.png)
 
-## KubeShare workflow demo clip
+## KubeShare system workflow demo clip
+
+All yaml files in clip are located in REPO_ROOT/doc/yaml.
 
 [![asciicast](https://asciinema.org/a/302094.png)](https://asciinema.org/a/302094)

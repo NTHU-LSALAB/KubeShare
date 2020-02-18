@@ -44,6 +44,7 @@ kubectl delete -f https://lsalab.cs.nthu.edu.tw/~ericyeh/KubeShare/scheduler.yam
 1. User create a SharePod to requiring portion GPU.
 2. kubeshare-scheduler schedules pending SharePods.
 3. kubeshare-device-manager will create a corresponding Pod object behind the SharePod with same namespace and name, and some extra critical settings. (Pod started to run)
+4. kubeshare-device-manager will synchronize Pod's ObjectMeta and PodStatus to SharePodStatus.
 4. SharePod was deleted by user. (Pod was also garbage collected by K8s)
 
 ### SharePod Specification
@@ -77,6 +78,12 @@ Because floating point custom device requests is forbidden by K8s, we move GPU r
 * kubeshare/sched_affinity (optional): only schedules SharePod with same sched_affinity label or schedules to an idle GPU.
 * kubeshare/sched_anti-affinity (optional): do not schedules SharedPods together which have the same sched_anti-affinity label.
 * kubeshare/sched_exclusion (optional): only one sched_exclusion label exists on a device, including empty label.
+
+### SharePod usage demo clip
+
+All yaml files in clip are located in REPO_ROOT/doc/yaml.
+
+[![asciicast](https://asciinema.org/a/302443.png)](https://asciinema.org/a/302443)
 
 ### SharePod with NodeName and GPUID (advanced)
 Follow this section to understand how to locate a SharePod on a GPU which is used by others.  
