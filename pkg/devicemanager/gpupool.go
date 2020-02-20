@@ -24,10 +24,10 @@ var (
 )
 
 type PodRequest struct {
-	Key     string
-	Request float64
-	Limit   float64
-	Memory  int64
+	Key            string
+	Request        float64
+	Limit          float64
+	Memory         int64
 	PodManagerPort int
 }
 
@@ -45,8 +45,8 @@ type NodeInfo struct {
 	UUID2Port map[string]string
 
 	// port in use
-	PodManagerPortBitmap bitmap.Bitmap
-	PodIP string
+	PodManagerPortBitmap *bitmap.RRBitmap
+	PodIP                string
 }
 
 var (
@@ -83,10 +83,10 @@ func (c *Controller) initNodesInfo() error {
 			GPUID = gpuid
 		}
 		if node, ok := nodesInfo[pod.Spec.NodeName]; !ok {
-			bm := &bitmap.Bitmap64{}
+			bm := bitmap.NewRRBitmap(512)
 			bm.Mask(0)
 			node = &NodeInfo{
-				GPUID2GPU: make(map[string]*GPUInfo),
+				GPUID2GPU:            make(map[string]*GPUInfo),
 				PodManagerPortBitmap: bm,
 			}
 			node.GPUID2GPU[GPUID] = &GPUInfo{
@@ -164,10 +164,10 @@ func (c *Controller) initNodesInfo() error {
 		gpu.Usage += gpu_request
 		gpu.Mem += gpu_mem
 		gpu.PodList.PushBack(&PodRequest{
-			Key:     fmt.Sprintf("%s/%s", sharepod.ObjectMeta.Namespace, sharepod.ObjectMeta.Name),
-			Request: gpu_request,
-			Limit:   gpu_limit,
-			Memory:  gpu_mem,
+			Key:            fmt.Sprintf("%s/%s", sharepod.ObjectMeta.Namespace, sharepod.ObjectMeta.Name),
+			Request:        gpu_request,
+			Limit:          gpu_limit,
+			Memory:         gpu_mem,
 			PodManagerPort: sharepod.Status.PodManagerPort,
 		})
 		node.PodManagerPortBitmap.Mask(sharepod.Status.PodManagerPort - PodManagerPortStart)
@@ -230,6 +230,7 @@ func FindInQueue(key string, pl *list.List) (*PodRequest, bool) {
  * errCode 0: no error
  * errCode 1: need dummy Pod
  * errCode 2: resource exceed
+ * errCode 3: Pod manager port pool is full
  * errCode 255: other error
  */
 func (c *Controller) getPhysicalGPUuuid(nodeName string, GPUID string, gpu_request, gpu_limit float64, gpu_mem int64, key string, port *int) (uuid string, errCode int) {
@@ -251,12 +252,17 @@ func (c *Controller) getPhysicalGPUuuid(nodeName string, GPUID string, gpu_reque
 			Mem:     gpu_mem,
 			PodList: list.New(),
 		}
-		*port = node.PodManagerPortBitmap.FindNextAndSet() + PodManagerPortStart
+		tmp := node.PodManagerPortBitmap.FindNextFromCurrentAndSet() + PodManagerPortStart
+		if tmp == -1 {
+			klog.Errorf("Pod manager port pool is full!!!!!")
+			return "", 3
+		}
+		*port = tmp
 		gpu.PodList.PushBack(&PodRequest{
-			Key:     key,
-			Request: gpu_request,
-			Limit:   gpu_limit,
-			Memory:  gpu_mem,
+			Key:            key,
+			Request:        gpu_request,
+			Limit:          gpu_limit,
+			Memory:         gpu_mem,
 			PodManagerPort: *port,
 		})
 		node.GPUID2GPU[GPUID] = gpu
@@ -271,12 +277,17 @@ func (c *Controller) getPhysicalGPUuuid(nodeName string, GPUID string, gpu_reque
 				gpu.Usage = tmp
 			}
 			gpu.Mem += gpu_mem
-			*port = node.PodManagerPortBitmap.FindNextAndSet() + PodManagerPortStart
+			tmp := node.PodManagerPortBitmap.FindNextFromCurrentAndSet() + PodManagerPortStart
+			if tmp == -1 {
+				klog.Errorf("Pod manager port pool is full!!!!!")
+				return "", 3
+			}
+			*port = tmp
 			gpu.PodList.PushBack(&PodRequest{
-				Key:     key,
-				Request: gpu_request,
-				Limit:   gpu_limit,
-				Memory:  gpu_mem,
+				Key:            key,
+				Request:        gpu_request,
+				Limit:          gpu_limit,
+				Memory:         gpu_mem,
 				PodManagerPort: *port,
 			})
 		} else {
@@ -429,7 +440,7 @@ func (c *Controller) removeSharePodFromList(sharepod *kubesharev1.SharePod) {
 				if podRequest.Key == key {
 					klog.Infof("Remove MtgpuPod %s from list, remaining %d MtgpuPod(s).", key, podlist.Len())
 					podlist.Remove(pod)
-					
+
 					uuid := gpu.UUID
 					remove := false
 

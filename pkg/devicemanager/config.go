@@ -124,7 +124,7 @@ func clientHandler(conn net.Conn) {
 
 	nodesInfoMux.Lock()
 	if node, ok := nodesInfo[nodeName]; !ok {
-		bm := &bitmap.Bitmap64{}
+		bm := bitmap.NewRRBitmap(512)
 		bm.Mask(0)
 		nodesInfo[nodeName] = &NodeInfo{
 			GPUID2GPU:            make(map[string]*GPUInfo),

@@ -2,6 +2,7 @@
 Share GPU between Pods in Kubernetes
 
 # Features
+* Treat GPU as a first class resource.
 * Compatible with native "nvidia.com/gpu" system.
 * Extensible architecture supports custom scheduling policies without modifing KubeShare.
 
@@ -109,7 +110,8 @@ spec: # PodSpec
         cpu: "1"
         memory: "500Mi"
 ```
-A GPU is shared between mulitple SharePods if the SharePods own the same <nodeName, GPUID> pair.  
+A GPU is shared between mulitple SharePods if the SharePods own the same <nodeName, GPUID> pair.
+
 Following is a demonstration about how kubeshare-scheduler schedule SharePods with GPUID mechanism in a single node with two physical GPUs:
 ```
 Initial status
