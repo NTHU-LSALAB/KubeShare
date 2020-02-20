@@ -33,29 +33,30 @@ def launch_scheduler():
 def update_podmanager(file):
     with open(file) as f:
         lines = f.readlines()
-    if not len(lines):
+    if not lines:
         return
     podnum = int(lines[0])
-    for n in podlist:
-        podlist[n][1] = False
+    for _, val in podlist.items():
+        val[0] = False
     for i in range(1, podnum+1):
         name, port = lines[i].split()
-        if name not in podlist:
-            sys.stderr.write("[launcher] pod manager id '{}' port '{}' start running\n".format(name, port))
+        name_port = lines[i][:-1]
+        if name_port not in podlist:
+            sys.stderr.write("[launcher] pod manager id '{}' port '{}' start running\n".format(name_port, port))
             sys.stderr.flush()
             proc = sp.Popen(
                 shlex.split(args.pmgr),
                 env=prepare_env(name, port, args.port),
                 preexec_fn=os.setpgrp,
             )
-            podlist[name] = [proc, True]
+            podlist[name_port] = [True, proc]
         else:
-            podlist[name][1] = True
+            podlist[name_port][0] = True
     del_list = []
-    for n in podlist:
-        if not podlist[n][1]:
-            os.killpg(os.getpgid(podlist[n][0].pid), signal.SIGKILL)
-            podlist[n][0].wait()
+    for n, val in podlist.items():
+        if not val[0]:
+            os.killpg(os.getpgid(val[1].pid), signal.SIGKILL)
+            val[1].wait()
             sys.stderr.write("[launcher] pod manager id '{}' has been deleted\n".format(n))
             sys.stderr.flush()
             del_list.append(n)
@@ -88,7 +89,8 @@ def main():
             if filename == args.gpu_uuid:
                 update_podmanager(os.path.join(args.pmgr_port_dir, args.gpu_uuid))
         except: # file content may not correct
-            pass
+            sys.stderr.write("Catch exception in update_podmanager: {}\n".format(sys.exc_info()))
+            sys.stderr.flush()
 
 if __name__ == '__main__':
     os.setpgrp()
@@ -98,6 +100,6 @@ if __name__ == '__main__':
         sys.stderr.write("Catch exception: {}\n".format(sys.exc_info()))
         sys.stderr.flush()
     finally:
-        for n in podlist:
-            os.killpg(os.getpgid(podlist[n][0].pid), signal.SIGKILL)
+        for _, val in podlist.items():
+            os.killpg(os.getpgid(val[1].pid), signal.SIGKILL)
         os.killpg(0, signal.SIGKILL)

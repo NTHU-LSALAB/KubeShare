@@ -315,7 +315,7 @@ func (c *Controller) syncHandler(key string) error {
 		isGPUPod = true
 	}
 
-	sharepod.Print()
+	// sharepod.Print()
 
 	if isGPUPod && sharepod.Status.BoundDeviceID == "" {
 		var errCode int
@@ -330,6 +330,10 @@ func (c *Controller) syncHandler(key string) error {
 			err := fmt.Errorf("Resource exceed!")
 			utilruntime.HandleError(err)
 			c.recorder.Event(sharepod, corev1.EventTypeWarning, ErrValueError, "Resource exceed")
+			return err
+		case 3:
+			err := fmt.Errorf("Pod manager port pool is full!")
+			utilruntime.HandleError(err)
 			return err
 		default:
 			utilruntime.HandleError(fmt.Errorf("Unknown Error"))
