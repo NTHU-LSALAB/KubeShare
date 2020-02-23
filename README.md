@@ -207,6 +207,7 @@ Please refer to [Gemini](https://github.com/NTHU-LSALAB/Gemini).
 
 # TODO
 Convert vGPU UUID update trigger method from dummy Pod creation handler to dummy Pod sending data to controller.  
+Add PodSpec.SchedulerName support to kubeshare-scheduler.
 
 # Issues
 Any issues please open a GitHub issue, thanks.
