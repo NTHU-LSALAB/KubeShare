@@ -6,10 +6,9 @@ import (
 	"strings"
 	"sync"
 
+	kubesharev1 "github.com/NTHU-LSALAB/KubeShare/pkg/apis/kubeshare/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog"
-	kubesharev1 "github.com/NTHU-LSALAB/KubeShare/pkg/apis/kubeshare/v1"
-	resourcetype "github.com/NTHU-LSALAB/KubeShare/pkg/devicemanager"
 )
 
 func syncClusterResources(nodeList []*corev1.Node, podList []*corev1.Pod, sharePodList []*kubesharev1.SharePod) (nodeResources NodeResources) {
@@ -24,7 +23,7 @@ func syncPodResources(nodeRes NodeResources, podList []*corev1.Pod, sharePodList
 		// 1. If Pod is not scheduled, it don't use resources.
 		// 2. If Pod's name contains "sharepod-dummypod" is managed by SharePod,
 		//    resource usage will be calcuated later.
-		if nodeName == "" || strings.Contains(pod.Name, resourcetype.KubeShareDummyPodName) {
+		if nodeName == "" || strings.Contains(pod.Name, kubesharev1.KubeShareDummyPodName) {
 			continue
 		}
 		// If a Pod is owned by a MtpguPod, calculating their resource usage later.
@@ -47,7 +46,7 @@ func syncPodResources(nodeRes NodeResources, podList []*corev1.Pod, sharePodList
 		for _, container := range pod.Spec.Containers {
 			nodeRes[nodeName].CpuFree -= container.Resources.Requests.Cpu().MilliValue()
 			nodeRes[nodeName].MemFree -= container.Resources.Requests.Memory().MilliValue()
-			gpu := container.Resources.Requests[resourcetype.ResourceNVIDIAGPU]
+			gpu := container.Resources.Requests[kubesharev1.ResourceNVIDIAGPU]
 			nodeRes[nodeName].GpuFreeCount -= int(gpu.Value())
 		}
 	}
@@ -88,24 +87,24 @@ func syncPodResources(nodeRes NodeResources, podList []*corev1.Pod, sharePodList
 		antiAffinityTag := ""
 		exclusionTag := ""
 
-		if sharePod.ObjectMeta.Annotations[resourcetype.KubeShareResourceGPURequest] != "" ||
-			sharePod.ObjectMeta.Annotations[resourcetype.KubeShareResourceGPULimit] != "" ||
-			sharePod.ObjectMeta.Annotations[resourcetype.KubeShareResourceGPUMemory] != "" ||
-			sharePod.ObjectMeta.Annotations[resourcetype.KubeShareResourceGPUID] != "" {
+		if sharePod.ObjectMeta.Annotations[kubesharev1.KubeShareResourceGPURequest] != "" ||
+			sharePod.ObjectMeta.Annotations[kubesharev1.KubeShareResourceGPULimit] != "" ||
+			sharePod.ObjectMeta.Annotations[kubesharev1.KubeShareResourceGPUMemory] != "" ||
+			sharePod.ObjectMeta.Annotations[kubesharev1.KubeShareResourceGPUID] != "" {
 			var err error
-			gpu_limit, err = strconv.ParseFloat(sharePod.ObjectMeta.Annotations[resourcetype.KubeShareResourceGPULimit], 64)
+			gpu_limit, err = strconv.ParseFloat(sharePod.ObjectMeta.Annotations[kubesharev1.KubeShareResourceGPULimit], 64)
 			if err != nil || gpu_limit > 1.0 || gpu_limit < 0.0 {
 				continue
 			}
-			gpu_request, err = strconv.ParseFloat(sharePod.ObjectMeta.Annotations[resourcetype.KubeShareResourceGPURequest], 64)
+			gpu_request, err = strconv.ParseFloat(sharePod.ObjectMeta.Annotations[kubesharev1.KubeShareResourceGPURequest], 64)
 			if err != nil || gpu_request > gpu_limit || gpu_request < 0.0 {
 				continue
 			}
-			gpu_mem, err = strconv.ParseInt(sharePod.ObjectMeta.Annotations[resourcetype.KubeShareResourceGPUMemory], 10, 64)
+			gpu_mem, err = strconv.ParseInt(sharePod.ObjectMeta.Annotations[kubesharev1.KubeShareResourceGPUMemory], 10, 64)
 			if err != nil || gpu_mem < 0 {
 				continue
 			}
-			GPUID = sharePod.ObjectMeta.Annotations[resourcetype.KubeShareResourceGPUID]
+			GPUID = sharePod.ObjectMeta.Annotations[kubesharev1.KubeShareResourceGPUID]
 			isGPUPod = true
 		}
 
@@ -142,7 +141,7 @@ func syncPodResources(nodeRes NodeResources, podList []*corev1.Pod, sharePodList
 				gpuInfo.GPUFreeReq -= int64(math.Ceil(gpu_request * (float64)(1000.0)))
 				gpuInfo.GPUFreeMem -= gpu_mem
 			}
-			
+
 			if affinityTag != "" {
 				isFound := false
 				for _, val := range nodeRes[nodeName].GpuFree[GPUID].GPUAffinityTags {
@@ -206,11 +205,11 @@ func syncNodeResources(nodeList []*corev1.Node) (nodeResources NodeResources) {
 		cpu := node.Status.Allocatable.Cpu().MilliValue()
 		mem := node.Status.Allocatable.Memory().MilliValue()
 		gpuNum := func() int {
-			tmp := node.Status.Allocatable[resourcetype.ResourceNVIDIAGPU]
+			tmp := node.Status.Allocatable[kubesharev1.ResourceNVIDIAGPU]
 			return int(tmp.Value())
 		}()
 		gpuMem := func() int64 {
-			if gpuInfo, ok := node.ObjectMeta.Annotations[resourcetype.KubeShareNodeGPUInfo]; ok {
+			if gpuInfo, ok := node.ObjectMeta.Annotations[kubesharev1.KubeShareNodeGPUInfo]; ok {
 				gpuInfoArr := strings.Split(gpuInfo, ",")
 				if len(gpuInfoArr) >= 1 {
 					gpuArr := strings.Split(gpuInfoArr[0], ":")
