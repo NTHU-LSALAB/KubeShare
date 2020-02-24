@@ -1,15 +1,16 @@
 package scheduler
 
 import (
+	"container/list"
 	"fmt"
 	"strconv"
-	"time"
-	"container/list"
 	"sync"
+	"time"
 
 	//appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+
 	// metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -29,7 +30,6 @@ import (
 	kubesharescheme "github.com/NTHU-LSALAB/KubeShare/pkg/client/clientset/versioned/scheme"
 	informers "github.com/NTHU-LSALAB/KubeShare/pkg/client/informers/externalversions/kubeshare/v1"
 	listers "github.com/NTHU-LSALAB/KubeShare/pkg/client/listers/kubeshare/v1"
-	resourcetype "github.com/NTHU-LSALAB/KubeShare/pkg/devicemanager"
 )
 
 const controllerAgentName = "kubeshare-scheduler"
@@ -55,7 +55,7 @@ const (
 
 // Controller is the controller implementation for Foo resources
 type Controller struct {
-	kubeclientset kubernetes.Interface
+	kubeclientset      kubernetes.Interface
 	kubeshareclientset clientset.Interface
 
 	nodesLister     corelisters.NodeLister
@@ -66,9 +66,9 @@ type Controller struct {
 	sharepodsSynced cache.InformerSynced
 
 	workqueue workqueue.RateLimitingInterface
-	recorder record.EventRecorder
+	recorder  record.EventRecorder
 
-	pendingList	*list.List
+	pendingList    *list.List
 	pendingListMux *sync.Mutex
 }
 
@@ -87,25 +87,25 @@ func NewController(
 	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: controllerAgentName})
 
 	controller := &Controller{
-		kubeclientset:     kubeclientset,
+		kubeclientset:      kubeclientset,
 		kubeshareclientset: kubeshareclientset,
-		nodesLister:       nodeInformer.Lister(),
-		nodesSynced:       nodeInformer.Informer().HasSynced,
-		podsLister:        podInformer.Lister(),
-		podsSynced:        podInformer.Informer().HasSynced,
-		sharepodsLister:   kubeshareInformer.Lister(),
-		sharepodsSynced:   kubeshareInformer.Informer().HasSynced,
-		workqueue:         workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "SharePods"),
-		recorder:          recorder,
-		pendingList: list.New(),
-		pendingListMux: &sync.Mutex{},
+		nodesLister:        nodeInformer.Lister(),
+		nodesSynced:        nodeInformer.Informer().HasSynced,
+		podsLister:         podInformer.Lister(),
+		podsSynced:         podInformer.Informer().HasSynced,
+		sharepodsLister:    kubeshareInformer.Lister(),
+		sharepodsSynced:    kubeshareInformer.Informer().HasSynced,
+		workqueue:          workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "SharePods"),
+		recorder:           recorder,
+		pendingList:        list.New(),
+		pendingListMux:     &sync.Mutex{},
 	}
 
 	klog.Info("Setting up event handlers")
 
 	kubeshareInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: controller.enqueueSharePod,
-        DeleteFunc: controller.resourceChanged,
+		AddFunc:    controller.enqueueSharePod,
+		DeleteFunc: controller.resourceChanged,
 	})
 
 	podInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -216,29 +216,29 @@ func (c *Controller) syncHandler(key string) error {
 	gpu_limit := 0.0
 	gpu_mem := int64(0)
 
-	if sharepod.ObjectMeta.Annotations[resourcetype.KubeShareResourceGPURequest] != "" ||
-		sharepod.ObjectMeta.Annotations[resourcetype.KubeShareResourceGPULimit] != "" ||
-		sharepod.ObjectMeta.Annotations[resourcetype.KubeShareResourceGPUMemory] != "" {
+	if sharepod.ObjectMeta.Annotations[kubesharev1.KubeShareResourceGPURequest] != "" ||
+		sharepod.ObjectMeta.Annotations[kubesharev1.KubeShareResourceGPULimit] != "" ||
+		sharepod.ObjectMeta.Annotations[kubesharev1.KubeShareResourceGPUMemory] != "" {
 		var err error
-		gpu_limit, err = strconv.ParseFloat(sharepod.ObjectMeta.Annotations[resourcetype.KubeShareResourceGPULimit], 64)
+		gpu_limit, err = strconv.ParseFloat(sharepod.ObjectMeta.Annotations[kubesharev1.KubeShareResourceGPULimit], 64)
 		if err != nil || gpu_limit > 1.0 || gpu_limit < 0.0 {
-			utilruntime.HandleError(fmt.Errorf("SharePod %s/%s value error: %s", sharepod.ObjectMeta.Namespace, sharepod.ObjectMeta.Name, resourcetype.KubeShareResourceGPULimit))
+			utilruntime.HandleError(fmt.Errorf("SharePod %s/%s value error: %s", sharepod.ObjectMeta.Namespace, sharepod.ObjectMeta.Name, kubesharev1.KubeShareResourceGPULimit))
 			return nil
 		}
-		gpu_request, err = strconv.ParseFloat(sharepod.ObjectMeta.Annotations[resourcetype.KubeShareResourceGPURequest], 64)
+		gpu_request, err = strconv.ParseFloat(sharepod.ObjectMeta.Annotations[kubesharev1.KubeShareResourceGPURequest], 64)
 		if err != nil || gpu_request > gpu_limit || gpu_request < 0.0 {
-			utilruntime.HandleError(fmt.Errorf("SharePod %s/%s value error: %s", sharepod.ObjectMeta.Namespace, sharepod.ObjectMeta.Name, resourcetype.KubeShareResourceGPURequest))
+			utilruntime.HandleError(fmt.Errorf("SharePod %s/%s value error: %s", sharepod.ObjectMeta.Namespace, sharepod.ObjectMeta.Name, kubesharev1.KubeShareResourceGPURequest))
 			return nil
 		}
-		gpu_mem, err = strconv.ParseInt(sharepod.ObjectMeta.Annotations[resourcetype.KubeShareResourceGPUMemory], 10, 64)
+		gpu_mem, err = strconv.ParseInt(sharepod.ObjectMeta.Annotations[kubesharev1.KubeShareResourceGPUMemory], 10, 64)
 		if err != nil || gpu_mem < 0 {
-			utilruntime.HandleError(fmt.Errorf("SharePod %s/%s value error: %s", sharepod.ObjectMeta.Namespace, sharepod.ObjectMeta.Name, resourcetype.KubeShareResourceGPUMemory))
+			utilruntime.HandleError(fmt.Errorf("SharePod %s/%s value error: %s", sharepod.ObjectMeta.Namespace, sharepod.ObjectMeta.Name, kubesharev1.KubeShareResourceGPUMemory))
 			return nil
 		}
 		isGPUPod = true
 	}
 
-	if isGPUPod && sharepod.ObjectMeta.Annotations[resourcetype.KubeShareResourceGPUID] != "" {
+	if isGPUPod && sharepod.ObjectMeta.Annotations[kubesharev1.KubeShareResourceGPUID] != "" {
 		utilruntime.HandleError(fmt.Errorf("SharePod '%s' GPUID had been scheduled.", key))
 		return nil
 	}
@@ -280,9 +280,9 @@ func (c *Controller) bindSharePodToNode(sharepod *kubesharev1.SharePod, schedNod
 	sharepodCopy.Spec.NodeName = schedNode
 	if schedGPUID != "" {
 		if sharepodCopy.ObjectMeta.Annotations != nil {
-			sharepodCopy.ObjectMeta.Annotations[resourcetype.KubeShareResourceGPUID] = schedGPUID
+			sharepodCopy.ObjectMeta.Annotations[kubesharev1.KubeShareResourceGPUID] = schedGPUID
 		} else {
-			sharepodCopy.ObjectMeta.Annotations = map[string]string{resourcetype.KubeShareResourceGPUID: schedGPUID}
+			sharepodCopy.ObjectMeta.Annotations = map[string]string{kubesharev1.KubeShareResourceGPUID: schedGPUID}
 		}
 	}
 

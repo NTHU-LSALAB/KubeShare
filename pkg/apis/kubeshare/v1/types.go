@@ -18,9 +18,9 @@ package v1
 
 import (
 	"bytes"
-    "math/rand"
-    "time"
-    "unsafe"
+	"math/rand"
+	"time"
+	"unsafe"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -28,14 +28,25 @@ import (
 )
 
 const (
-    letterIdxBits = 5                    // 6 bits to represent a letter index
-    letterIdxMask = 1<<letterIdxBits - 1 // All 1-bits, as many as letterIdxBits
-    letterIdxMax  = 63 / letterIdxBits   // # of letter indices fitting in 63 bits
-    letterBytes = "abcdefghijklmnopqrstuvwxyz"
-    // letterIdxBits = 6                    // 6 bits to represent a letter index
-    // letterIdxMask = 1<<letterIdxBits - 1 // All 1-bits, as many as letterIdxBits
-    // letterIdxMax  = 63 / letterIdxBits   // # of letter indices fitting in 63 bits
-    // letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	letterIdxBits = 5                    // 6 bits to represent a letter index
+	letterIdxMask = 1<<letterIdxBits - 1 // All 1-bits, as many as letterIdxBits
+	letterIdxMax  = 63 / letterIdxBits   // # of letter indices fitting in 63 bits
+	letterBytes   = "abcdefghijklmnopqrstuvwxyz"
+	// letterIdxBits = 6                    // 6 bits to represent a letter index
+	// letterIdxMask = 1<<letterIdxBits - 1 // All 1-bits, as many as letterIdxBits
+	// letterIdxMax  = 63 / letterIdxBits   // # of letter indices fitting in 63 bits
+	// letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+	// kubeshare constants
+	KubeShareResourceGPURequest = "kubeshare/gpu_request"
+	KubeShareResourceGPULimit   = "kubeshare/gpu_limit"
+	KubeShareResourceGPUMemory  = "kubeshare/gpu_mem"
+	KubeShareResourceGPUID      = "kubeshare/GPUID"
+	KubeShareDummyPodName       = "kubeshare-vgpu"
+	KubeShareNodeName           = "kubeshare/nodeName"
+	KubeShareRole               = "kubeshare/role"
+	KubeShareNodeGPUInfo        = "kubeshare/gpu_info"
+	ResourceNVIDIAGPU           = "nvidia.com/gpu"
 )
 
 // +genclient
@@ -57,9 +68,9 @@ type SharePodStatus struct {
 	BoundDeviceID     string
 	StartTime         *metav1.Time
 	ContainerStatuses []corev1.ContainerStatus*/
-	PodStatus     *corev1.PodStatus
-	PodObjectMeta *metav1.ObjectMeta
-	BoundDeviceID string
+	PodStatus      *corev1.PodStatus
+	PodObjectMeta  *metav1.ObjectMeta
+	BoundDeviceID  string
 	PodManagerPort int
 }
 
@@ -98,6 +109,7 @@ func (this SharePod) Print() {
 
 // https://stackoverflow.com/questions/22892120/how-to-generate-a-random-string-of-a-fixed-length-in-go/31832326#31832326
 var src = rand.NewSource(time.Now().UnixNano())
+
 func NewGPUID(n int) string {
 	b := make([]byte, n)
 	for i, cache, remain := n-1, src.Int63(), letterIdxMax; i >= 0; {
