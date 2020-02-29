@@ -9,6 +9,7 @@ Share GPU between Pods in Kubernetes
 ## Prerequisite & Limitation
 * A Kubernetes cluster with [garbage collection](https://kubernetes.io/docs/concepts/workloads/controllers/garbage-collection/), [DNS enabled](https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/), and [Nvidia GPU device plugin](https://kubernetes.io/docs/tasks/manage-gpus/scheduling-gpus/#deploying-nvidia-gpu-device-plugin) installed.
 * GPU attachment setting of container should be going through NVIDIA_VISIBLE_DEVICES environment variable (docker and nvidia-docker2 version < 19).
+* One GPU model within one node.
 
 ## CUDA Version Compatibility
 |CUDA Version|Status|
@@ -24,16 +25,16 @@ Share GPU between Pods in Kubernetes
 
 ### Installation
 ```
-kubectl create -f https://lsalab.cs.nthu.edu.tw/~ericyeh/KubeShare/crd.yaml
-kubectl create -f https://lsalab.cs.nthu.edu.tw/~ericyeh/KubeShare/device-manager.yaml
-kubectl create -f https://lsalab.cs.nthu.edu.tw/~ericyeh/KubeShare/scheduler.yaml
+kubectl create -f https://lsalab.cs.nthu.edu.tw/~ericyeh/KubeShare/v0.9/crd.yaml
+kubectl create -f https://lsalab.cs.nthu.edu.tw/~ericyeh/KubeShare/v0.9/device-manager.yaml
+kubectl create -f https://lsalab.cs.nthu.edu.tw/~ericyeh/KubeShare/v0.9/scheduler.yaml
 ```
 
 ### Uninstallation
 ```
-kubectl delete -f https://lsalab.cs.nthu.edu.tw/~ericyeh/KubeShare/crd.yaml
-kubectl delete -f https://lsalab.cs.nthu.edu.tw/~ericyeh/KubeShare/device-manager.yaml
-kubectl delete -f https://lsalab.cs.nthu.edu.tw/~ericyeh/KubeShare/scheduler.yaml
+kubectl delete -f https://lsalab.cs.nthu.edu.tw/~ericyeh/KubeShare/v0.9/crd.yaml
+kubectl delete -f https://lsalab.cs.nthu.edu.tw/~ericyeh/KubeShare/v0.9/device-manager.yaml
+kubectl delete -f https://lsalab.cs.nthu.edu.tw/~ericyeh/KubeShare/v0.9/scheduler.yaml
 ```
 
 ## SharePod
@@ -55,9 +56,9 @@ kind: SharePod
 metadata:
   name: sharepod1
   annotations:
-    "kubeshare/gpu_request": "0.5" # required
-    "kubeshare/gpu_limit": "1.0" # required
-    "kubeshare/gpu_mem": "1073741824" # required # 1Gi, in bytes
+    "kubeshare/gpu_request": "0.5" # required if allocating GPU
+    "kubeshare/gpu_limit": "1.0" # required if allocating GPU
+    "kubeshare/gpu_mem": "1073741824" # required if allocating GPU # 1Gi, in bytes
     "kubeshare/sched_affinity": "red" # optional
     "kubeshare/sched_anti-affinity": "green" # optional
     "kubeshare/sched_exclusion": "blue" # optional
@@ -72,9 +73,9 @@ spec: # PodSpec
         memory: "500Mi"
 ```
 Because floating point custom device requests is forbidden by K8s, we move GPU resource usage definitions to Annotations.
-* kubeshare/gpu_request (required): guaranteed GPU usage of Pod, gpu_request <= "1.0".
-* kubeshare/gpu_limit (required): maximum extra usage if GPU still has free resources, gpu_request <= gpu_limit <= "1.0".
-* kubeshare/gpu_mem (required): maximum GPU memory usage of Pod, in bytes.
+* kubeshare/gpu_request (required if allocating GPU): guaranteed GPU usage of Pod, gpu_request <= "1.0".
+* kubeshare/gpu_limit (required if allocating GPU): maximum extra usage if GPU still has free resources, gpu_request <= gpu_limit <= "1.0".
+* kubeshare/gpu_mem (required if allocating GPU): maximum GPU memory usage of Pod, in bytes.
 * spec (required): a normal PodSpec definition to be running in K8s.
 * kubeshare/sched_affinity (optional): only schedules SharePod with same sched_affinity label or schedules to an idle GPU.
 * kubeshare/sched_anti-affinity (optional): do not schedules SharedPods together which have the same sched_anti-affinity label.
@@ -186,7 +187,7 @@ More details in [System Architecture](doc/architecture.md)
 
 ### Compiling
 ```
-git clone https://github.com/ncy9371/KubeShare.git
+git clone https://github.com/NTHU-LSALAB/KubeShare.git
 cd KubeShare
 make
 ```

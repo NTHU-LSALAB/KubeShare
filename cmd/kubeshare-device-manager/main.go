@@ -18,8 +18,11 @@ package main
 
 import (
 	"flag"
+	"os"
 	"time"
 
+	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubeinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
@@ -64,6 +67,11 @@ func main() {
 		klog.Fatalf("Error building example clientset: %s", err.Error())
 	}
 
+	if !checkCRD(kubeshareClient) {
+		klog.Error("CRD doesn't exist. Exiting")
+		os.Exit(1)
+	}
+
 	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeClient, time.Second*30)
 	kubeshareInformerFactory := informers.NewSharedInformerFactory(kubeshareClient, time.Second*30)
 
@@ -85,4 +93,17 @@ func init() {
 	flag.StringVar(&kubeconfig, "kubeconfig", "", "Path to a kubeconfig. Only required if out-of-cluster.")
 	flag.StringVar(&masterURL, "master", "", "The address of the Kubernetes API server. Overrides any value in kubeconfig. Only required if out-of-cluster.")
 	flag.IntVar(&threadNum, "threadness", 1, "The number of worker threads.")
+}
+
+func checkCRD(kubeshareClientSet *clientset.Clientset) bool {
+	_, err := kubeshareClientSet.KubeshareV1().SharePods("").List(metav1.ListOptions{})
+	if err != nil {
+		klog.Error(err)
+		if _, ok := err.(*errors.StatusError); ok {
+			if errors.IsNotFound(err) {
+				return false
+			}
+		}
+	}
+	return true
 }

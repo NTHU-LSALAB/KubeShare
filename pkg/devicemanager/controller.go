@@ -528,11 +528,11 @@ func newPod(sharepod *kubesharev1.SharePod, isGPUPod bool, podManagerIP string, 
 				},
 			},
 		)
+		annotationCopy[kubesharev1.KubeShareResourceGPURequest] = sharepod.ObjectMeta.Annotations[kubesharev1.KubeShareResourceGPURequest]
+		annotationCopy[kubesharev1.KubeShareResourceGPULimit] = sharepod.ObjectMeta.Annotations[kubesharev1.KubeShareResourceGPULimit]
+		annotationCopy[kubesharev1.KubeShareResourceGPUMemory] = sharepod.ObjectMeta.Annotations[kubesharev1.KubeShareResourceGPUMemory]
+		annotationCopy[kubesharev1.KubeShareResourceGPUID] = sharepod.ObjectMeta.Annotations[kubesharev1.KubeShareResourceGPUID]
 	}
-	annotationCopy[kubesharev1.KubeShareResourceGPURequest] = sharepod.ObjectMeta.Annotations[kubesharev1.KubeShareResourceGPURequest]
-	annotationCopy[kubesharev1.KubeShareResourceGPULimit] = sharepod.ObjectMeta.Annotations[kubesharev1.KubeShareResourceGPULimit]
-	annotationCopy[kubesharev1.KubeShareResourceGPUMemory] = sharepod.ObjectMeta.Annotations[kubesharev1.KubeShareResourceGPUMemory]
-	annotationCopy[kubesharev1.KubeShareResourceGPUID] = sharepod.ObjectMeta.Annotations[kubesharev1.KubeShareResourceGPUID]
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      sharepod.ObjectMeta.Name,
