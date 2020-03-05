@@ -8,9 +8,14 @@ Share GPU between Pods in Kubernetes
 
 ## Prerequisite & Limitation
 * A Kubernetes cluster with [garbage collection](https://kubernetes.io/docs/concepts/workloads/controllers/garbage-collection/), [DNS enabled](https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/), and [Nvidia GPU device plugin](https://kubernetes.io/docs/tasks/manage-gpus/scheduling-gpus/#deploying-nvidia-gpu-device-plugin) installed.
+<!--
 * GPU attachment setting of container should be going through NVIDIA_VISIBLE_DEVICES environment variable (docker and nvidia-docker2 version < 19).
+-->
 * One GPU model within one node.
+* cuda==10.0 (other version not tested)
+* docker version < 19, nvidia-docker2 version < 19
 
+<!--
 ## CUDA Version Compatibility
 |CUDA Version|Status|
 |-|-|
@@ -20,6 +25,7 @@ Share GPU between Pods in Kubernetes
 |10.0|Yes|
 |10.1|Unknown|
 |10.2|Unknown|
+-->
 
 ## Run
 
@@ -111,7 +117,7 @@ spec: # PodSpec
         cpu: "1"
         memory: "500Mi"
 ```
-A GPU is shared between mulitple SharePods if the SharePods own the same <nodeName, GPUID> pair.
+A GPU is shared between multiple SharePods if the SharePods own the same <nodeName, GPUID> pair.
 
 Following is a demonstration about how kubeshare-scheduler schedule SharePods with GPUID mechanism in a single node with two physical GPUs:
 ```
