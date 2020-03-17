@@ -8,12 +8,12 @@ Share GPU between Pods in Kubernetes
 
 ## Prerequisite & Limitation
 * A Kubernetes cluster with [garbage collection](https://kubernetes.io/docs/concepts/workloads/controllers/garbage-collection/), [DNS enabled](https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/), and [Nvidia GPU device plugin](https://kubernetes.io/docs/tasks/manage-gpus/scheduling-gpus/#deploying-nvidia-gpu-device-plugin) installed.
+* One GPU model within one node.
+* cuda == 10.0 (other version not tested)
+* docker version < 19, nvidia-docker2 version < 19
 <!--
 * GPU attachment setting of container should be going through NVIDIA_VISIBLE_DEVICES environment variable (docker and nvidia-docker2 version < 19).
 -->
-* One GPU model within one node.
-* cuda==10.0 (other version not tested)
-* docker version < 19, nvidia-docker2 version < 19
 
 <!--
 ## CUDA Version Compatibility
@@ -213,8 +213,9 @@ make
 Please refer to [Gemini](https://github.com/NTHU-LSALAB/Gemini).
 
 # TODO
-Convert vGPU UUID update trigger method from dummy Pod creation handler to dummy Pod sending data to controller.  
-Add PodSpec.SchedulerName support to kubeshare-scheduler.
+* Convert vGPU UUID update trigger method from dummy Pod creation handler to dummy Pod sending data to controller.  
+* Add PodSpec.SchedulerName support to kubeshare-scheduler.
+* Docker version check at init phase in config-client.
 
 # Issues
 Any issues please open a GitHub issue, thanks.
