@@ -56,6 +56,7 @@ func ScheduleAlgorithmBestFit(isGPUPod bool, gpu_request float64, gpu_mem int64,
 
 	scheduleNode := func(nodeName string, nodeRes *NodeResource) {
 		if nodeRes.CpuFree < cpuReqTotal || nodeRes.MemFree < memReqTotal {
+			wait.Done()
 			return
 		}
 		if isGPUPod {
