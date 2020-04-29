@@ -26,7 +26,7 @@ func syncPodResources(nodeRes NodeResources, podList []*corev1.Pod, sharePodList
 		if nodeName == "" || strings.Contains(pod.Name, kubesharev1.KubeShareDummyPodName) {
 			continue
 		}
-		// If a Pod is owned by a MtpguPod, calculating their resource usage later.
+		// If a Pod is owned by a SharePod, calculating their resource usage later.
 		ownedBySharePod := false
 		for _, owneref := range pod.ObjectMeta.OwnerReferences {
 			if owneref.Kind == "SharePod" {
@@ -40,6 +40,14 @@ func syncPodResources(nodeRes NodeResources, podList []*corev1.Pod, sharePodList
 		// If a running Pod is on the node we don't want, don't calculate it.
 		// ex. on master has NoSchedule Taint.
 		if _, ok := nodeRes[nodeName]; !ok {
+			continue
+		}
+
+		if (pod.Spec.RestartPolicy == corev1.RestartPolicyOnFailure &&
+			pod.Status.Phase == corev1.PodSucceeded) ||
+			(pod.Spec.RestartPolicy == corev1.RestartPolicyNever &&
+				(pod.Status.Phase == corev1.PodSucceeded ||
+					pod.Status.Phase == corev1.PodFailed)) {
 			continue
 		}
 
@@ -63,9 +71,10 @@ func syncPodResources(nodeRes NodeResources, podList []*corev1.Pod, sharePodList
 			continue
 		}
 		if sharePod.Status.PodStatus != nil {
-			if (sharePod.Spec.RestartPolicy == corev1.RestartPolicyAlways) ||
-				(sharePod.Spec.RestartPolicy == corev1.RestartPolicyOnFailure &&
-					sharePod.Status.PodStatus.Phase == corev1.PodSucceeded) ||
+			// why policy Always is ignored? why??? I forgot why wrote this then
+			// if (sharePod.Spec.RestartPolicy == corev1.RestartPolicyAlways) ||
+			if (sharePod.Spec.RestartPolicy == corev1.RestartPolicyOnFailure &&
+				sharePod.Status.PodStatus.Phase == corev1.PodSucceeded) ||
 				(sharePod.Spec.RestartPolicy == corev1.RestartPolicyNever &&
 					(sharePod.Status.PodStatus.Phase == corev1.PodSucceeded ||
 						sharePod.Status.PodStatus.Phase == corev1.PodFailed)) {
