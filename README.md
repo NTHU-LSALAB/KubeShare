@@ -219,3 +219,6 @@ Please refer to [Gemini](https://github.com/NTHU-LSALAB/Gemini).
 
 # Issues
 Any issues please open a GitHub issue, thanks.
+
+# Publication
+Our paper is accepted by [ACM HPDC 2020](https://dl.acm.org/doi/10.1145/3369583.3392679), and an introduction video is also available on [YouTube](https://youtu.be/1WQMKCGN9j4).
