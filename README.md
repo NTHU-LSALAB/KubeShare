@@ -8,9 +8,10 @@ Share GPU between Pods in Kubernetes
 
 ## Prerequisite & Limitation
 * A Kubernetes cluster with [garbage collection](https://kubernetes.io/docs/concepts/workloads/controllers/garbage-collection/), [DNS enabled](https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/), and [Nvidia GPU device plugin](https://kubernetes.io/docs/tasks/manage-gpus/scheduling-gpus/#deploying-nvidia-gpu-device-plugin) installed.
+* Only support a kubernetes cluster that uses the environment variable `NVIDIA_VISIBLE_DEVICES` to control which GPUs will be made accessible inside the container.
 * One GPU model within one node.
 * cuda == 10.0 (other version not tested)
-* docker version < 19, nvidia-docker2 version < 19
+
 <!--
 * GPU attachment setting of container should be going through NVIDIA_VISIBLE_DEVICES environment variable (docker and nvidia-docker2 version < 19).
 -->
