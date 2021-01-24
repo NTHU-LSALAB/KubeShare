@@ -1,0 +1,67 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kubeshare-scheduler
+  namespace: kube-system
+
+---
+
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: kubeshare-scheduler
+rules:
+- apiGroups: [""]
+  resources: ["*"]
+  verbs: ["*"]
+- apiGroups: ["kubeshare.nthu"]
+  resources: ["*"]
+  verbs: ["*"]
+
+---
+
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: kubeshare-scheduler
+subjects:
+- kind: ServiceAccount
+  name: kubeshare-scheduler
+  namespace: kube-system
+roleRef:
+  kind: ClusterRole
+  name: kubeshare-scheduler
+  apiGroup: rbac.authorization.k8s.io
+
+---
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: kubeshare-scheduler
+  namespace: kube-system
+  annotations:
+    scheduler.alpha.kubernetes.io/critical-pod: ""
+  labels:
+    app: kubeshare-scheduler
+spec:
+  serviceAccountName: kubeshare-scheduler
+  priorityClassName: system-node-critical
+  tolerations:
+  - key: "CriticalAddonsOnly"
+    operator: "Exists"
+  - key: "node-role.kubernetes.io/master"
+    operator: "Exists"
+    effect: "NoSchedule"
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: "node-role.kubernetes.io/master"
+            operator: "Exists"
+  restartPolicy: Never
+  containers:
+  - name: kubeshare-scheduler
+    image: ncy9371/kubeshare-scheduler:20200429135835
+
