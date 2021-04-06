@@ -17,8 +17,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog"
 
-	kubesharev1 "github.com/NTHU-LSALAB/KubeShare/pkg/apis/kubeshare/v1"
-	"github.com/NTHU-LSALAB/KubeShare/pkg/lib/bitmap"
+	sharedgpuv1 "KubeShare/pkg/apis/sharedgpu/v1"
+	"KubeShare/pkg/lib/bitmap"
 )
 
 type ClientStatus string
@@ -207,7 +207,7 @@ func UpdateNodeGPUInfo(nodeName string, uuid2mem *map[string]string) {
 		newNode.ObjectMeta.Annotations = make(map[string]string)
 	}
 	gpuinfo := buf.String()
-	newNode.ObjectMeta.Annotations[kubesharev1.KubeShareNodeGPUInfo] = gpuinfo
+	newNode.ObjectMeta.Annotations[sharedgpuv1.KubeShareNodeGPUInfo] = gpuinfo
 	klog.Infof("Update node %s GPU info: %s", nodeName, gpuinfo)
 	_, err = kubeClient.CoreV1().Nodes().Update(newNode)
 	if err != nil {

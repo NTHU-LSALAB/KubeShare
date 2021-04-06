@@ -15,8 +15,8 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/klog"
 
-	kubesharev1 "github.com/NTHU-LSALAB/KubeShare/pkg/apis/kubeshare/v1"
-	"github.com/NTHU-LSALAB/KubeShare/pkg/lib/bitmap"
+	sharedgpuv1 "KubeShare/pkg/apis/sharedgpu/v1"
+	"KubeShare/pkg/lib/bitmap"
 )
 
 var (
@@ -56,10 +56,10 @@ var (
 
 func (c *Controller) initNodesInfo() error {
 	var pods []*corev1.Pod
-	var sharepods []*kubesharev1.SharePod
+	var sharepods []*sharedgpuv1.SharePod
 	var err error
 
-	dummyPodsLabel := labels.SelectorFromSet(labels.Set{kubesharev1.KubeShareRole: "dummyPod"})
+	dummyPodsLabel := labels.SelectorFromSet(labels.Set{sharedgpuv1.KubeShareRole: "dummyPod"})
 	if pods, err = c.podsLister.Pods("kube-system").List(dummyPodsLabel); err != nil {
 		errrr := fmt.Errorf("Error when list Pods: %s", err)
 		klog.Error(errrr)
@@ -76,7 +76,7 @@ func (c *Controller) initNodesInfo() error {
 
 	for _, pod := range pods {
 		GPUID := ""
-		if gpuid, ok := pod.ObjectMeta.Labels[kubesharev1.KubeShareResourceGPUID]; !ok {
+		if gpuid, ok := pod.ObjectMeta.Labels[sharedgpuv1.KubeShareResourceGPUID]; !ok {
 			klog.Errorf("Error dummy Pod annotation: %s/%s", pod.ObjectMeta.Namespace, pod.ObjectMeta.Name)
 			continue
 		} else {
@@ -124,15 +124,15 @@ func (c *Controller) initNodesInfo() error {
 		GPUID := ""
 
 		var err error
-		gpu_limit, err = strconv.ParseFloat(sharepod.ObjectMeta.Annotations[kubesharev1.KubeShareResourceGPULimit], 64)
+		gpu_limit, err = strconv.ParseFloat(sharepod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPULimit], 64)
 		if err != nil || gpu_limit > 1.0 || gpu_limit < 0.0 {
 			continue
 		}
-		gpu_request, err = strconv.ParseFloat(sharepod.ObjectMeta.Annotations[kubesharev1.KubeShareResourceGPURequest], 64)
+		gpu_request, err = strconv.ParseFloat(sharepod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPURequest], 64)
 		if err != nil || gpu_request > gpu_limit || gpu_request < 0.0 {
 			continue
 		}
-		gpu_mem, err = strconv.ParseInt(sharepod.ObjectMeta.Annotations[kubesharev1.KubeShareResourceGPUMemory], 10, 64)
+		gpu_mem, err = strconv.ParseInt(sharepod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPUMemory], 10, 64)
 		if err != nil || gpu_mem < 0 {
 			continue
 		}
@@ -144,7 +144,7 @@ func (c *Controller) initNodesInfo() error {
 			continue
 		}
 		// if Spec.NodeName is assigned but GPUID is empty, it's an error
-		if gpuid, ok := sharepod.ObjectMeta.Annotations[kubesharev1.KubeShareResourceGPUID]; !ok {
+		if gpuid, ok := sharepod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPUID]; !ok {
 			continue
 		} else {
 			GPUID = gpuid
@@ -305,7 +305,7 @@ func (c *Controller) getPhysicalGPUuuid(nodeName string, GPUID string, gpu_reque
 }
 
 func (c *Controller) createDummyPod(nodeName string, GPUID string) error {
-	podName := fmt.Sprintf("%s-%s-%s", kubesharev1.KubeShareDummyPodName, nodeName, GPUID)
+	podName := fmt.Sprintf("%s-%s-%s", sharedgpuv1.KubeShareDummyPodName, nodeName, GPUID)
 
 	createit := func() error {
 		klog.Infof("ERICYEH: creating dummy pod: %s", podName)
@@ -315,9 +315,9 @@ func (c *Controller) createDummyPod(nodeName string, GPUID string) error {
 				Name:      podName,
 				Namespace: "kube-system",
 				Labels: map[string]string{
-					kubesharev1.KubeShareRole:          "dummyPod",
-					kubesharev1.KubeShareNodeName:      nodeName,
-					kubesharev1.KubeShareResourceGPUID: GPUID,
+					sharedgpuv1.KubeShareRole:          "dummyPod",
+					sharedgpuv1.KubeShareNodeName:      nodeName,
+					sharedgpuv1.KubeShareResourceGPUID: GPUID,
 				},
 			},
 			Spec: corev1.PodSpec{
@@ -328,8 +328,8 @@ func (c *Controller) createDummyPod(nodeName string, GPUID string) error {
 						Name:  "sleepforever",
 						Image: "ncy9371/kubeshare-vgpupod:200217232846",
 						Resources: corev1.ResourceRequirements{
-							Requests: corev1.ResourceList{kubesharev1.ResourceNVIDIAGPU: ResourceQuantity1},
-							Limits:   corev1.ResourceList{kubesharev1.ResourceNVIDIAGPU: ResourceQuantity1},
+							Requests: corev1.ResourceList{sharedgpuv1.ResourceNVIDIAGPU: ResourceQuantity1},
+							Limits:   corev1.ResourceList{sharedgpuv1.ResourceNVIDIAGPU: ResourceQuantity1},
 						},
 					},
 				},
@@ -425,9 +425,9 @@ func (c *Controller) getAndSetUUIDFromDummyPod(nodeName, GPUID, podName string, 
 	return nil
 }
 
-func (c *Controller) removeSharePodFromList(sharepod *kubesharev1.SharePod) {
+func (c *Controller) removeSharePodFromList(sharepod *sharedgpuv1.SharePod) {
 	nodeName := sharepod.Spec.NodeName
-	GPUID := sharepod.Annotations[kubesharev1.KubeShareResourceGPUID]
+	GPUID := sharepod.Annotations[sharedgpuv1.KubeShareResourceGPUID]
 	key := fmt.Sprintf("%s/%s", sharepod.ObjectMeta.Namespace, sharepod.ObjectMeta.Name)
 
 	nodesInfoMux.Lock()
@@ -468,7 +468,7 @@ func (c *Controller) removeSharePodFromList(sharepod *kubesharev1.SharePod) {
 }
 
 func (c *Controller) deleteDummyPod(nodeName, GPUID, uuid string) {
-	key := fmt.Sprintf("%s-%s-%s", kubesharev1.KubeShareDummyPodName, nodeName, GPUID)
+	key := fmt.Sprintf("%s-%s-%s", sharedgpuv1.KubeShareDummyPodName, nodeName, GPUID)
 	klog.Infof("Deleting dummy Pod: %s", key)
 	c.kubeclientset.CoreV1().Pods("kube-system").Delete(key, &metav1.DeleteOptions{})
 	syncConfig(nodeName, uuid, nil)

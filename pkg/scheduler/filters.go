@@ -1,16 +1,16 @@
 package scheduler
 
 import (
-	kubesharev1 "github.com/NTHU-LSALAB/KubeShare/pkg/apis/kubeshare/v1"
+	sharedgpuv1 "KubeShare/pkg/apis/sharedgpu/v1"
 )
 
-var filters = []func(NodeResources, *kubesharev1.SharePod){
+var filters = []func(NodeResources, *sharedgpuv1.SharePod){
 	GPUAffinityFilter,
 	GPUAntiAffinityFilter,
 	GPUExclusionFilter,
 }
 
-func GPUAffinityFilter(nodeResources NodeResources, sharepod *kubesharev1.SharePod) {
+func GPUAffinityFilter(nodeResources NodeResources, sharepod *sharedgpuv1.SharePod) {
 	affinityTag := ""
 	if val, ok := sharepod.ObjectMeta.Annotations[KubeShareScheduleAffinity]; ok {
 		affinityTag = val
@@ -33,7 +33,7 @@ func GPUAffinityFilter(nodeResources NodeResources, sharepod *kubesharev1.ShareP
 	}
 }
 
-func GPUExclusionFilter(nodeResources NodeResources, sharepod *kubesharev1.SharePod) {
+func GPUExclusionFilter(nodeResources NodeResources, sharepod *sharedgpuv1.SharePod) {
 	exclusionTag := ""
 	if val, ok := sharepod.ObjectMeta.Annotations[KubeShareScheduleExclusion]; ok {
 		exclusionTag = val
@@ -55,7 +55,7 @@ func GPUExclusionFilter(nodeResources NodeResources, sharepod *kubesharev1.Share
 	}
 }
 
-func GPUAntiAffinityFilter(nodeResources NodeResources, sharepod *kubesharev1.SharePod) {
+func GPUAntiAffinityFilter(nodeResources NodeResources, sharepod *sharedgpuv1.SharePod) {
 	antiAffinityTag := ""
 	if val, ok := sharepod.ObjectMeta.Annotations[KubeShareScheduleAntiAffinity]; ok {
 		antiAffinityTag = val

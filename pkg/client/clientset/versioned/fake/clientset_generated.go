@@ -19,9 +19,10 @@ limitations under the License.
 package fake
 
 import (
-	clientset "github.com/NTHU-LSALAB/KubeShare/pkg/client/clientset/versioned"
-	kubesharev1 "github.com/NTHU-LSALAB/KubeShare/pkg/client/clientset/versioned/typed/kubeshare/v1"
-	fakekubesharev1 "github.com/NTHU-LSALAB/KubeShare/pkg/client/clientset/versioned/typed/kubeshare/v1/fake"
+	clientset "KubeShare/pkg/client/clientset/versioned"
+	sharedgpuv1 "KubeShare/pkg/client/clientset/versioned/typed/sharedgpu/v1"
+	fakesharedgpuv1 "KubeShare/pkg/client/clientset/versioned/typed/sharedgpu/v1/fake"
+
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/discovery"
@@ -76,7 +77,7 @@ func (c *Clientset) Tracker() testing.ObjectTracker {
 
 var _ clientset.Interface = &Clientset{}
 
-// KubeshareV1 retrieves the KubeshareV1Client
-func (c *Clientset) KubeshareV1() kubesharev1.KubeshareV1Interface {
-	return &fakekubesharev1.FakeKubeshareV1{Fake: &c.Fake}
+// SharedgpuV1 retrieves the SharedgpuV1Client
+func (c *Clientset) SharedgpuV1() sharedgpuv1.SharedgpuV1Interface {
+	return &fakesharedgpuv1.FakeSharedgpuV1{Fake: &c.Fake}
 }

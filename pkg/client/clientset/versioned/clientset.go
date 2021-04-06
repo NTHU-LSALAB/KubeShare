@@ -19,9 +19,9 @@ limitations under the License.
 package versioned
 
 import (
+	sharedgpuv1 "KubeShare/pkg/client/clientset/versioned/typed/sharedgpu/v1"
 	"fmt"
 
-	kubesharev1 "github.com/NTHU-LSALAB/KubeShare/pkg/client/clientset/versioned/typed/kubeshare/v1"
 	discovery "k8s.io/client-go/discovery"
 	rest "k8s.io/client-go/rest"
 	flowcontrol "k8s.io/client-go/util/flowcontrol"
@@ -29,19 +29,19 @@ import (
 
 type Interface interface {
 	Discovery() discovery.DiscoveryInterface
-	KubeshareV1() kubesharev1.KubeshareV1Interface
+	SharedgpuV1() sharedgpuv1.SharedgpuV1Interface
 }
 
 // Clientset contains the clients for groups. Each group has exactly one
 // version included in a Clientset.
 type Clientset struct {
 	*discovery.DiscoveryClient
-	kubeshareV1 *kubesharev1.KubeshareV1Client
+	sharedgpuV1 *sharedgpuv1.SharedgpuV1Client
 }
 
-// KubeshareV1 retrieves the KubeshareV1Client
-func (c *Clientset) KubeshareV1() kubesharev1.KubeshareV1Interface {
-	return c.kubeshareV1
+// SharedgpuV1 retrieves the SharedgpuV1Client
+func (c *Clientset) SharedgpuV1() sharedgpuv1.SharedgpuV1Interface {
+	return c.sharedgpuV1
 }
 
 // Discovery retrieves the DiscoveryClient
@@ -65,7 +65,7 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 	}
 	var cs Clientset
 	var err error
-	cs.kubeshareV1, err = kubesharev1.NewForConfig(&configShallowCopy)
+	cs.sharedgpuV1, err = sharedgpuv1.NewForConfig(&configShallowCopy)
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +81,7 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 // panics if there is an error in the config.
 func NewForConfigOrDie(c *rest.Config) *Clientset {
 	var cs Clientset
-	cs.kubeshareV1 = kubesharev1.NewForConfigOrDie(c)
+	cs.sharedgpuV1 = sharedgpuv1.NewForConfigOrDie(c)
 
 	cs.DiscoveryClient = discovery.NewDiscoveryClientForConfigOrDie(c)
 	return &cs
@@ -90,7 +90,7 @@ func NewForConfigOrDie(c *rest.Config) *Clientset {
 // New creates a new Clientset for the given RESTClient.
 func New(c rest.Interface) *Clientset {
 	var cs Clientset
-	cs.kubeshareV1 = kubesharev1.New(c)
+	cs.sharedgpuV1 = sharedgpuv1.New(c)
 
 	cs.DiscoveryClient = discovery.NewDiscoveryClient(c)
 	return &cs

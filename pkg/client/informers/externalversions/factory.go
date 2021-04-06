@@ -19,13 +19,13 @@ limitations under the License.
 package externalversions
 
 import (
+	versioned "KubeShare/pkg/client/clientset/versioned"
+	internalinterfaces "KubeShare/pkg/client/informers/externalversions/internalinterfaces"
+	sharedgpu "KubeShare/pkg/client/informers/externalversions/sharedgpu"
 	reflect "reflect"
 	sync "sync"
 	time "time"
 
-	versioned "github.com/NTHU-LSALAB/KubeShare/pkg/client/clientset/versioned"
-	internalinterfaces "github.com/NTHU-LSALAB/KubeShare/pkg/client/informers/externalversions/internalinterfaces"
-	kubeshare "github.com/NTHU-LSALAB/KubeShare/pkg/client/informers/externalversions/kubeshare"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
@@ -172,9 +172,9 @@ type SharedInformerFactory interface {
 	ForResource(resource schema.GroupVersionResource) (GenericInformer, error)
 	WaitForCacheSync(stopCh <-chan struct{}) map[reflect.Type]bool
 
-	Kubeshare() kubeshare.Interface
+	Sharedgpu() sharedgpu.Interface
 }
 
-func (f *sharedInformerFactory) Kubeshare() kubeshare.Interface {
-	return kubeshare.New(f, f.namespace, f.tweakListOptions)
+func (f *sharedInformerFactory) Sharedgpu() sharedgpu.Interface {
+	return sharedgpu.New(f, f.namespace, f.tweakListOptions)
 }

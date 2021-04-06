@@ -19,9 +19,9 @@ limitations under the License.
 package externalversions
 
 import (
+	v1 "KubeShare/pkg/apis/sharedgpu/v1"
 	"fmt"
 
-	v1 "github.com/NTHU-LSALAB/KubeShare/pkg/apis/kubeshare/v1"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	cache "k8s.io/client-go/tools/cache"
 )
@@ -52,9 +52,9 @@ func (f *genericInformer) Lister() cache.GenericLister {
 // TODO extend this to unknown resources with a client pool
 func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource) (GenericInformer, error) {
 	switch resource {
-	// Group=kubeshare.nthu, Version=v1
+	// Group=sharedgpu.goc, Version=v1
 	case v1.SchemeGroupVersion.WithResource("sharepods"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Kubeshare().V1().SharePods().Informer()}, nil
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Sharedgpu().V1().SharePods().Informer()}, nil
 
 	}
 

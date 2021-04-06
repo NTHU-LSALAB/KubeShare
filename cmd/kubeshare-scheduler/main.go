@@ -31,10 +31,10 @@ import (
 	// Uncomment the following line to load the gcp plugin (only required to authenticate against GKE clusters).
 	// _ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 
-	clientset "github.com/NTHU-LSALAB/KubeShare/pkg/client/clientset/versioned"
-	informers "github.com/NTHU-LSALAB/KubeShare/pkg/client/informers/externalversions"
-	kubesharecontroller "github.com/NTHU-LSALAB/KubeShare/pkg/scheduler"
-	"github.com/NTHU-LSALAB/KubeShare/pkg/signals"
+	clientset "KubeShare/pkg/client/clientset/versioned"
+	informers "KubeShare/pkg/client/informers/externalversions"
+	kubesharecontroller "KubeShare/pkg/scheduler"
+	"KubeShare/pkg/signals"
 )
 
 var (
@@ -75,7 +75,7 @@ func main() {
 	controller := kubesharecontroller.NewController(kubeClient, kubeshareClient,
 		kubeInformerFactory.Core().V1().Nodes(),
 		kubeInformerFactory.Core().V1().Pods(),
-		kubeshareInformerFactory.Kubeshare().V1().SharePods())
+		kubeshareInformerFactory.Sharedgpu().V1().SharePods())
 
 	// notice that there is no need to run Start methods in a separate goroutine. (i.e. go kubeInformerFactory.Start(stopCh)
 	// Start method is non-blocking and runs all registered informers in a dedicated goroutine.
@@ -93,7 +93,7 @@ func init() {
 }
 
 func checkCRD(kubeshareClientSet *clientset.Clientset) bool {
-	_, err := kubeshareClientSet.KubeshareV1().SharePods("").List(metav1.ListOptions{})
+	_, err := kubeshareClientSet.SharedgpuV1().SharePods("").List(metav1.ListOptions{})
 	if err != nil {
 		klog.Error(err)
 		if _, ok := err.(*errors.StatusError); ok {

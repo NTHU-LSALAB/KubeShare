@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nvpod1
+spec:
+  containers:
+    - name: tf
+      image: tensorflow/tensorflow:1.15.2-gpu-py3
+      command: ["sh", "-c", "curl -s https://lsalab.cs.nthu.edu.tw/~ericyeh/KubeShare/demo/mnist.py | python3 -"]
+      resources:
+        limits:
+          nvidia.com/gpu: 1 # requesting 2 GPUs
+          cpu: 2
+        requests:
+          nvidia.com/gpu: 1 
+          cpu: 1
+  restartPolicy: OnFailure
+  terminationGracePeriodSeconds: 0

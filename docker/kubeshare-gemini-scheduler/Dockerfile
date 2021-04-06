@@ -6,10 +6,16 @@ WORKDIR /tmp/build
 
 COPY . kubeshare
 
-RUN apt update && \
-    apt install -y git && \
-    git clone https://github.com/NTHU-LSALAB/Gemini.git && cd Gemini && \
-    make -C src
+# RUN apt update && \
+#     apt install -y git && \
+#     git clone https://github.com/NTHU-LSALAB/Gemini.git && cd Gemini && \
+#     make -C src
+
+COPY ./Gemini-1.0 Gemini
+
+RUN cd Gemini && \
+    make -C src CUDA_PATH=/usr/local/cuda/ 
+
 
 FROM python:3.8.1-buster
 

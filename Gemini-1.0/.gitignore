@@ -1,0 +1,7 @@
+.vscode/
+bin/
+lib/
+*.o
+gem-schd
+gem-pmgr
+libgemhook.so.1
