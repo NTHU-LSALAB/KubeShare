@@ -48,9 +48,9 @@ const (
 	// is synced successfully
 	MessageResourceSynced = "SharePod scheduled successfully"
 
-	KubeShareScheduleAffinity     = "kubeshare/sched_affinity"
-	KubeShareScheduleAntiAffinity = "kubeshare/sched_anti-affinity"
-	KubeShareScheduleExclusion    = "kubeshare/sched_exclusion"
+	KubeShareScheduleAffinity     = "sharedgpu/sched_affinity"
+	KubeShareScheduleAntiAffinity = "sharedgpu/sched_anti-affinity"
+	KubeShareScheduleExclusion    = "sharedgpu/sched_exclusion"
 )
 
 // Controller is the controller implementation for Foo resources

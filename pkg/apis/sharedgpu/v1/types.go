@@ -38,14 +38,14 @@ const (
 	// letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 	// kubeshare constants
-	KubeShareResourceGPURequest = "kubeshare/gpu_request"
-	KubeShareResourceGPULimit   = "kubeshare/gpu_limit"
-	KubeShareResourceGPUMemory  = "kubeshare/gpu_mem"
-	KubeShareResourceGPUID      = "kubeshare/GPUID"
-	KubeShareDummyPodName       = "kubeshare-vgpu"
-	KubeShareNodeName           = "kubeshare/nodeName"
-	KubeShareRole               = "kubeshare/role"
-	KubeShareNodeGPUInfo        = "kubeshare/gpu_info"
+	KubeShareResourceGPURequest = "sharedgpu/gpu_request"
+	KubeShareResourceGPULimit   = "sharedgpu/gpu_limit"
+	KubeShareResourceGPUMemory  = "sharedgpu/gpu_mem"
+	KubeShareResourceGPUID      = "sharedgpu/GPUID"
+	KubeShareDummyPodName       = "sharedgpu-vgpu"
+	KubeShareNodeName           = "sharedgpu/nodeName"
+	KubeShareRole               = "sharedgpu/role"
+	KubeShareNodeGPUInfo        = "sharedgpu/gpu_info"
 	ResourceNVIDIAGPU           = "nvidia.com/gpu"
 )
 
