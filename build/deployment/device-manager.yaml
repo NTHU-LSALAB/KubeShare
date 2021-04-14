@@ -98,16 +98,18 @@ metadata:
   name: kubeshare-node-daemon
   namespace: kube-system
   labels:
-    lsalab: kubeshare-node-daemon
+    kubeshare: kubeshare-node-daemon
 spec:
   selector:
     matchLabels:
-      lsalab: kubeshare-node-daemon
+      kubeshare: kubeshare-node-daemon
   template:
     metadata:
       labels:
-        lsalab: kubeshare-node-daemon
+        kubeshare: kubeshare-node-daemon
     spec:
+      nodeSelector:
+        SharedGPU: "true"
       terminationGracePeriodSeconds: 0
       restartPolicy: Always
       tolerations:
