@@ -57,7 +57,7 @@ spec:
       serviceAccountName: kubeshare-scheduler
       containers:
         - name: kubeshare-scheduler
-          image: riyazhu/kubeshare-scheduler
+          image: riyazhu/kubeshare-scheduler:develop
       priorityClassName: system-node-critical
       tolerations:
       - key: "CriticalAddonsOnly"

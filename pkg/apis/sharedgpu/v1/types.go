@@ -27,6 +27,8 @@ import (
 	"k8s.io/klog"
 )
 
+type SharePodPhase string
+
 const (
 	letterIdxBits = 5                    // 6 bits to represent a letter index
 	letterIdxMask = 1<<letterIdxBits - 1 // All 1-bits, as many as letterIdxBits
@@ -47,6 +49,11 @@ const (
 	KubeShareRole               = "sharedgpu/role"
 	KubeShareNodeGPUInfo        = "sharedgpu/gpu_info"
 	ResourceNVIDIAGPU           = "nvidia.com/gpu"
+
+	// Phase : the condition of a sharepod at the current time
+	SharePodPending   SharePodPhase = "Pending"
+	SharePodFailed    SharePodPhase = "Failed"
+	SharePodSucceeded SharePodPhase = "Succeeded"
 )
 
 // +genclient
@@ -63,15 +70,27 @@ type SharePod struct {
 }
 
 type SharePodStatus struct {
-	/*PodPhase          corev1.PodPhase
-	ConfigFilePhase   ConfigFilePhase
-	BoundDeviceID     string
-	StartTime         *metav1.Time
-	ContainerStatuses []corev1.ContainerStatus*/
-	PodStatus      *corev1.PodStatus
-	PodObjectMeta  *metav1.ObjectMeta
-	BoundDeviceID  string
-	PodManagerPort int
+	// The phase of a sharepod is align with pod phase
+	// More info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#pod-phase
+	// +optional
+	Phase SharePodPhase `json:"phase,omitempty" protobuf:"bytes,1,opt,name=phase,casttype=PodPhase"`
+	// A brief CamelCase message indicating details about why the pod is in this state.
+	// e.g. 'Evicted'
+	// +optional
+	// Reason string `json:"reason,omitempty" protobuf:"bytes,4,opt,name=reason"`
+	// A human readable message indicating details about why the pod is in this condition.
+	// +optional
+	Message string `json:"message,omitempty" protobuf:"bytes,3,opt,name=message"`
+
+	/*
+		ConfigFilePhase   ConfigFilePhase
+		BoundDeviceID     string
+		StartTime         *metav1.Time
+		ContainerStatuses []corev1.ContainerStatus*/
+	PodStatus      *corev1.PodStatus  `json:"podStatus,omitempty" protobuf:"bytes,2,opt,name=podStatus"`
+	PodObjectMeta  *metav1.ObjectMeta `json:"podObjectMeta,omitempty" protobuf:"bytes,1,opt,name=podObjectMeta"`
+	BoundDeviceID  string             `json:"boundDeviceID,omitempty" protobuf:"bytes,2,opt,name=boundDeviceID"`
+	PodManagerPort int                `json:"port" protobuf:"varint,3,opt,name=podManagerPort"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -86,23 +105,23 @@ type SharePodList struct {
 	Items []SharePod `json:"items"`
 }
 
-func (this SharePod) Print() {
+func (shp SharePod) Print() {
 	var buf bytes.Buffer
 	buf.WriteString("\n================= SharePod ==================")
 	buf.WriteString("\nname: ")
-	buf.WriteString(this.ObjectMeta.Namespace)
+	buf.WriteString(shp.ObjectMeta.Namespace)
 	buf.WriteString("/")
-	buf.WriteString(this.ObjectMeta.Name)
+	buf.WriteString(shp.ObjectMeta.Name)
 	buf.WriteString("\nannotation:\n\tkubeshare/gpu_request: ")
-	buf.WriteString(this.ObjectMeta.Annotations["kubeshare/gpu_request"])
-	if this.Status.PodStatus != nil {
+	buf.WriteString(shp.ObjectMeta.Annotations["kubeshare/gpu_request"])
+	if shp.Status.PodStatus != nil {
 		buf.WriteString("\nstatus:\n\tPodStatus: ")
-		buf.WriteString(string(this.Status.PodStatus.Phase))
+		buf.WriteString(string(shp.Status.PodStatus.Phase))
 	}
 	buf.WriteString("\n\tGPUID: ")
-	buf.WriteString(this.ObjectMeta.Annotations["kubeshare/GPUID"])
+	buf.WriteString(shp.ObjectMeta.Annotations["kubeshare/GPUID"])
 	buf.WriteString("\n\tBoundDeviceID: ")
-	buf.WriteString(this.Status.BoundDeviceID)
+	buf.WriteString(shp.Status.BoundDeviceID)
 	buf.WriteString("\n=============================================")
 	klog.Info(buf.String())
 }

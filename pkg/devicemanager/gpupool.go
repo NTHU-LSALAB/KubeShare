@@ -59,12 +59,14 @@ func (c *Controller) initNodesInfo() error {
 	var sharepods []*sharedgpuv1.SharePod
 	var err error
 
+	// find the dummyPod
 	dummyPodsLabel := labels.SelectorFromSet(labels.Set{sharedgpuv1.KubeShareRole: "dummyPod"})
 	if pods, err = c.podsLister.Pods("kube-system").List(dummyPodsLabel); err != nil {
 		errrr := fmt.Errorf("Error when list Pods: %s", err)
 		klog.Error(errrr)
 		return errrr
 	}
+	// find the sharePod
 	if sharepods, err = c.sharepodsLister.List(labels.Everything()); err != nil {
 		errrr := fmt.Errorf("Error when list SharePods: %s", err)
 		klog.Error(errrr)
@@ -74,7 +76,10 @@ func (c *Controller) initNodesInfo() error {
 	nodesInfoMux.Lock()
 	defer nodesInfoMux.Unlock()
 
+	// process the dummy pod
 	for _, pod := range pods {
+
+		// get the GPUID from the dummy pod
 		GPUID := ""
 		if gpuid, ok := pod.ObjectMeta.Labels[sharedgpuv1.KubeShareResourceGPUID]; !ok {
 			klog.Errorf("Error dummy Pod annotation: %s/%s", pod.ObjectMeta.Namespace, pod.ObjectMeta.Name)
@@ -82,6 +87,9 @@ func (c *Controller) initNodesInfo() error {
 		} else {
 			GPUID = gpuid
 		}
+
+		// If the information of the node doesn't exist, create it.
+		// Otherwise, get the GPUInfo from GPUID of the node
 		if node, ok := nodesInfo[pod.Spec.NodeName]; !ok {
 			bm := bitmap.NewRRBitmap(512)
 			bm.Mask(0)

@@ -1,0 +1,15 @@
+apiVersion: sharedgpu.goc/v1
+kind: SharePod
+metadata:
+  name: pod1
+  annotations:
+    "sharedgpu/gpu_request": "0.4"
+    "sharedgpu/gpu_limit": "1.0"
+    #    "sharedgpu/gpu_mem": "3145728000"
+spec:
+  terminationGracePeriodSeconds: 0
+  containers:
+  - name: tf
+    image: tensorflow/tensorflow:1.15.2-gpu-py3
+    command: ["sh", "-c", "curl -s https://lsalab.cs.nthu.edu.tw/~ericyeh/KubeShare/demo/mnist.py | python3 -"]
+  restartPolicy: OnFailure

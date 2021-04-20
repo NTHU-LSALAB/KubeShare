@@ -211,29 +211,47 @@ func (c *Controller) syncHandler(key string) error {
 		return nil
 	}
 
+	if sharepod, err = c.updateSharePodStatus(sharepod, sharedgpuv1.SharePodPending, "SharePod is creating"); err != nil {
+		utilruntime.HandleError(fmt.Errorf("SharePod %s/%s  update error: %v", sharepod.ObjectMeta.Namespace, sharepod.ObjectMeta.Name, err))
+	}
 	isGPUPod := false
 	gpu_request := 0.0
 	gpu_limit := 0.0
 	gpu_mem := int64(0)
+	//gpu_mem_set := false
 
 	if sharepod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPURequest] != "" ||
 		sharepod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPULimit] != "" ||
 		sharepod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPUMemory] != "" {
-		var err error
+		var err, errr error
 		gpu_limit, err = strconv.ParseFloat(sharepod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPULimit], 64)
 		if err != nil || gpu_limit > 1.0 || gpu_limit < 0.0 {
+			if sharepod, errr = c.updateSharePodStatus(sharepod, sharedgpuv1.SharePodFailed, "The gpu_limit value error"); errr != nil {
+				utilruntime.HandleError(fmt.Errorf("SharePod %s/%s  update error: %v", sharepod.ObjectMeta.Namespace, sharepod.ObjectMeta.Name, errr))
+			}
 			utilruntime.HandleError(fmt.Errorf("SharePod %s/%s value error: %s", sharepod.ObjectMeta.Namespace, sharepod.ObjectMeta.Name, sharedgpuv1.KubeShareResourceGPULimit))
 			return nil
 		}
 		gpu_request, err = strconv.ParseFloat(sharepod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPURequest], 64)
 		if err != nil || gpu_request > gpu_limit || gpu_request < 0.0 {
+			if sharepod, errr = c.updateSharePodStatus(sharepod, sharedgpuv1.SharePodFailed, "The gpu_request value error"); errr != nil {
+				utilruntime.HandleError(fmt.Errorf("SharePod %s/%s  update error: %v", sharepod.ObjectMeta.Namespace, sharepod.ObjectMeta.Name, errr))
+			}
 			utilruntime.HandleError(fmt.Errorf("SharePod %s/%s value error: %s", sharepod.ObjectMeta.Namespace, sharepod.ObjectMeta.Name, sharedgpuv1.KubeShareResourceGPURequest))
 			return nil
 		}
-		gpu_mem, err = strconv.ParseInt(sharepod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPUMemory], 10, 64)
-		if err != nil || gpu_mem < 0 {
-			utilruntime.HandleError(fmt.Errorf("SharePod %s/%s value error: %s", sharepod.ObjectMeta.Namespace, sharepod.ObjectMeta.Name, sharedgpuv1.KubeShareResourceGPUMemory))
-			return nil
+		// TODO:  string  == nil
+		gpu_mem_annotation := sharepod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPUMemory]
+		if gpu_mem_annotation != "" {
+			//gpu_mem_set = true
+			gpu_mem, err = strconv.ParseInt(sharepod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPUMemory], 10, 64)
+			if err != nil || gpu_mem < 0 {
+				if sharepod, errr = c.updateSharePodStatus(sharepod, sharedgpuv1.SharePodFailed, "The gpu_mem value error"); errr != nil {
+					utilruntime.HandleError(fmt.Errorf("SharePod %s/%s  update error: %v", sharepod.ObjectMeta.Namespace, sharepod.ObjectMeta.Name, errr))
+				}
+				utilruntime.HandleError(fmt.Errorf("SharePod %s/%s value error: %s", sharepod.ObjectMeta.Namespace, sharepod.ObjectMeta.Name, sharedgpuv1.KubeShareResourceGPUMemory))
+				return nil
+			}
 		}
 		isGPUPod = true
 	}
@@ -255,9 +273,15 @@ func (c *Controller) syncHandler(key string) error {
 	if err != nil {
 		return err
 	}
+	// TODO: when gpu_mem == 0
 	schedNode, schedGPUID := scheduleSharePod(isGPUPod, gpu_request, gpu_mem, sharepod, nodeList, podList, sharePodList)
 	if schedNode == "" {
 		klog.Infof("No enough resources for SharePod: %s/%s", sharepod.ObjectMeta.Namespace, sharepod.ObjectMeta.Name)
+
+		if sharepod, err = c.updateSharePodStatus(sharepod, sharedgpuv1.SharePodPending, "No enough resources for SharePod"); err != nil {
+			utilruntime.HandleError(fmt.Errorf("SharePod %s/%s  update error", sharepod.ObjectMeta.Namespace, sharepod.ObjectMeta.Name))
+		}
+
 		// return fmt.Errorf("No enough resources for SharePod: %s/%s")
 		c.pendingListMux.Lock()
 		c.pendingList.PushBack(key)
@@ -267,7 +291,10 @@ func (c *Controller) syncHandler(key string) error {
 
 	klog.Infof("SharePod '%s' had been scheduled to node '%s' GPUID '%s'.", key, schedNode, schedGPUID)
 
-	if err := c.bindSharePodToNode(sharepod, schedNode, schedGPUID); err != nil {
+	if err := c.bindSharePodToNode(sharepod, schedNode, schedGPUID, sharedgpuv1.SharePodPending, "SharePod success to bind to node, wait to create pod"); err != nil {
+		if sharepod, err = c.updateSharePodStatus(sharepod, sharedgpuv1.SharePodPending, "Current can not bind to node"); err != nil {
+			utilruntime.HandleError(fmt.Errorf("SharePod %s/%s  update error", sharepod.ObjectMeta.Namespace, sharepod.ObjectMeta.Name))
+		}
 		return err
 	}
 
@@ -275,8 +302,21 @@ func (c *Controller) syncHandler(key string) error {
 	return nil
 }
 
-func (c *Controller) bindSharePodToNode(sharepod *sharedgpuv1.SharePod, schedNode, schedGPUID string) error {
+func (c *Controller) updateSharePodStatus(sharepod *sharedgpuv1.SharePod, phase sharedgpuv1.SharePodPhase, message string) (*sharedgpuv1.SharePod, error) {
+	klog.V(4).Infof("[RIYACHU] updateSharePodStatus\n")
+
 	sharepodCopy := sharepod.DeepCopy()
+	sharepodCopy.Status.Phase = phase
+	sharepodCopy.Status.Message = message
+
+	shp, err := c.kubeshareclientset.SharedgpuV1().SharePods(sharepodCopy.Namespace).Update(sharepodCopy)
+	return shp, err
+}
+
+func (c *Controller) bindSharePodToNode(sharepod *sharedgpuv1.SharePod, schedNode, schedGPUID string, phase sharedgpuv1.SharePodPhase, message string) error {
+	sharepodCopy := sharepod.DeepCopy()
+	sharepodCopy.Status.Phase = phase
+	sharepodCopy.Status.Message = message
 	sharepodCopy.Spec.NodeName = schedNode
 	if schedGPUID != "" {
 		if sharepodCopy.ObjectMeta.Annotations != nil {

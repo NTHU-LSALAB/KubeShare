@@ -3,6 +3,8 @@ package devicemanager
 import (
 	"fmt"
 	"strconv"
+
+	// "strconv"
 	"strings"
 	"time"
 
@@ -33,6 +35,7 @@ import (
 )
 
 const controllerAgentName = "kubeshare-controller"
+const schedulerName = "kubeshare-scheduler"
 
 const (
 	// SuccessSynced is used as part of the Event 'reason' when a SharePod is synced
@@ -75,7 +78,7 @@ type Controller struct {
 	recorder record.EventRecorder
 }
 
-// NewController returns a new sample controller
+// NewController returns a new kubeshare controller
 func NewController(
 	kubeclientset kubernetes.Interface,
 	kubeshareclientset clientset.Interface,
@@ -83,8 +86,8 @@ func NewController(
 	kubeshareInformer informers.SharePodInformer) *Controller {
 
 	// Create event broadcaster
-	// Add sample-controller types to the default Kubernetes Scheme so Events can be
-	// logged for sample-controller types.
+	// Add kubeshare-controller types to the default Kubernetes Scheme so Events can be
+	// logged for kubeshare-controller types.
 	utilruntime.Must(kubesharescheme.AddToScheme(scheme.Scheme))
 	klog.V(4).Info("Creating event broadcaster")
 	eventBroadcaster := record.NewBroadcaster()
@@ -255,11 +258,6 @@ func (c *Controller) syncHandler(key string) error {
 		return err
 	}
 
-	if sharepod.Spec.NodeName == "" {
-		utilruntime.HandleError(fmt.Errorf("SharePod '%s' must be scheduled! Spec.NodeName is empty.", key))
-		return nil
-	}
-
 	isGPUPod := false
 	gpu_request := 0.0
 	gpu_limit := 0.0
@@ -267,6 +265,11 @@ func (c *Controller) syncHandler(key string) error {
 	GPUID := ""
 	physicalGPUuuid := ""
 	physicalGPUport := 0
+
+	if sharepod.Spec.NodeName == "" {
+		utilruntime.HandleError(fmt.Errorf("SharePod '%s' must be scheduled! Spec.NodeName is empty.", key))
+		return nil
+	}
 
 	// GPU Pod needs to be filled with request, limit, memory, and GPUID, or none of them.
 	// If something weird, reject it (record the reason to user then return nil)
@@ -280,24 +283,41 @@ func (c *Controller) syncHandler(key string) error {
 		if err != nil || gpu_limit > 1.0 || gpu_limit < 0.0 {
 			utilruntime.HandleError(fmt.Errorf("SharePod %s/%s gpu_limit value error: %s", sharepod.ObjectMeta.Namespace, sharepod.ObjectMeta.Name, sharedgpuv1.KubeShareResourceGPULimit))
 			c.recorder.Event(sharepod, corev1.EventTypeWarning, ErrValueError, "Value error: "+sharedgpuv1.KubeShareResourceGPULimit)
+
+			if err := c.updateSharePodStaus(sharepod, sharedgpuv1.SharePodFailed, "gpu_limit value error"); err != nil {
+				utilruntime.HandleError(fmt.Errorf("SharePod %s/%s update error: %s", sharepod.ObjectMeta.Namespace, sharepod.ObjectMeta.Name))
+			}
 			return nil
 		}
 		gpu_request, err = strconv.ParseFloat(sharepod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPURequest], 64)
 		if err != nil || gpu_request > gpu_limit || gpu_request < 0.0 {
 			utilruntime.HandleError(fmt.Errorf("SharePod %s/%s gpu_request value error: %s", sharepod.ObjectMeta.Namespace, sharepod.ObjectMeta.Name, sharedgpuv1.KubeShareResourceGPURequest))
 			c.recorder.Event(sharepod, corev1.EventTypeWarning, ErrValueError, "Value error: "+sharedgpuv1.KubeShareResourceGPURequest)
+
+			if err := c.updateSharePodStaus(sharepod, sharedgpuv1.SharePodFailed, "gpu_request value error"); err != nil {
+				utilruntime.HandleError(fmt.Errorf("SharePod %s/%s update error: %s", sharepod.ObjectMeta.Namespace, sharepod.ObjectMeta.Name))
+			}
+
 			return nil
 		}
 		gpu_mem, err = strconv.ParseInt(sharepod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPUMemory], 10, 64)
 		if err != nil || gpu_mem < 0 {
 			utilruntime.HandleError(fmt.Errorf("SharePod %s/%s gpu_mem value error: %s", sharepod.ObjectMeta.Namespace, sharepod.ObjectMeta.Name, sharedgpuv1.KubeShareResourceGPUMemory))
 			c.recorder.Event(sharepod, corev1.EventTypeWarning, ErrValueError, "Value error: "+sharedgpuv1.KubeShareResourceGPUMemory)
+
+			if err := c.updateSharePodStaus(sharepod, sharedgpuv1.SharePodFailed, "gpu_mem value error"); err != nil {
+				utilruntime.HandleError(fmt.Errorf("SharePod %s/%s update error: %s", sharepod.ObjectMeta.Namespace, sharepod.ObjectMeta.Name))
+			}
 			return nil
 		}
 		GPUID = sharepod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPUID]
 		if len(GPUID) == 0 {
 			utilruntime.HandleError(fmt.Errorf("SharePod %s/%s GPUID value error: %s", sharepod.ObjectMeta.Namespace, sharepod.ObjectMeta.Name, sharedgpuv1.KubeShareResourceGPUID))
 			c.recorder.Event(sharepod, corev1.EventTypeWarning, ErrValueError, "Value error: "+sharedgpuv1.KubeShareResourceGPUID)
+
+			if err := c.updateSharePodStaus(sharepod, sharedgpuv1.SharePodPending, "GPUID need to be set"); err != nil {
+				utilruntime.HandleError(fmt.Errorf("SharePod %s/%s update error: %s", sharepod.ObjectMeta.Namespace, sharepod.ObjectMeta.Name))
+			}
 			return nil
 		}
 		isGPUPod = true
@@ -358,7 +378,7 @@ func (c *Controller) syncHandler(key string) error {
 		go c.removeSharePodFromList(sharepod)
 	}
 
-	err = c.updateSharePodStatus(sharepod, pod, physicalGPUport)
+	err = c.updateSharePodWithPodStatus(sharepod, pod, physicalGPUport, sharedgpuv1.SharePodSucceeded, "Pod create success")
 	if err != nil {
 		return err
 	}
@@ -367,10 +387,26 @@ func (c *Controller) syncHandler(key string) error {
 	return nil
 }
 
-func (c *Controller) updateSharePodStatus(sharepod *sharedgpuv1.SharePod, pod *corev1.Pod, port int) error {
+func (c *Controller) updateSharePodStaus(sharepod *sharedgpuv1.SharePod, phase sharedgpuv1.SharePodPhase, message string) error {
+	klog.V(4).Infof("[RIYACHU] updateSharePodStatus\n")
+
+	sharepodCopy := sharepod.DeepCopy()
+	sharepodCopy.Status.Phase = phase
+	sharepodCopy.Status.Message = message
+
+	_, err := c.kubeshareclientset.SharedgpuV1().SharePods(sharepodCopy.Namespace).Update(sharepodCopy)
+	return err
+}
+
+func (c *Controller) updateSharePodWithPodStatus(sharepod *sharedgpuv1.SharePod, pod *corev1.Pod, port int, phase sharedgpuv1.SharePodPhase, message string) error {
+	klog.V(4).Infof("[RIYACHU] updateSharePodWithPodStatus\n")
+
 	sharepodCopy := sharepod.DeepCopy()
 	sharepodCopy.Status.PodStatus = pod.Status.DeepCopy()
 	sharepodCopy.Status.PodObjectMeta = pod.ObjectMeta.DeepCopy()
+	sharepodCopy.Status.Phase = phase
+	sharepodCopy.Status.Message = message
+
 	if port != 0 {
 		sharepodCopy.Status.PodManagerPort = port
 	}
@@ -419,6 +455,7 @@ func (c *Controller) handleObject(obj interface{}) {
 	// get physical GPU UUID from dummy Pod
 	// get UUID here to prevent request throttling
 	if pod, ok := obj.(*corev1.Pod); ok {
+
 		if pod.ObjectMeta.Namespace == "kube-system" && strings.Contains(pod.ObjectMeta.Name, sharedgpuv1.KubeShareDummyPodName) && (pod.Status.Phase == corev1.PodRunning || pod.Status.Phase == corev1.PodFailed) {
 			// TODO: change the method of getting GPUID from label to more reliable source
 			// e.g. Pod name (kubeshare-dummypod-{NodeName}-{GPUID})
@@ -467,7 +504,14 @@ func (c *Controller) handleObject(obj interface{}) {
 // newDeployment creates a new Deployment for a SharePod resource. It also sets
 // the appropriate OwnerReferences on the resource so handleObject can discover
 // the SharePod resource that 'owns' it.
+
+// To update or create the sharePod resource:
+// 1. GPU information
+// 2. Pod Phase
 func newPod(sharepod *sharedgpuv1.SharePod, isGPUPod bool, podManagerIP string, podManagerPort int) *corev1.Pod {
+
+	klog.V(4).Infof("[RIYACHU] newPod\n")
+
 	specCopy := sharepod.Spec.DeepCopy()
 	labelCopy := make(map[string]string, len(sharepod.ObjectMeta.Labels))
 	for key, val := range sharepod.ObjectMeta.Labels {
@@ -477,7 +521,9 @@ func newPod(sharepod *sharedgpuv1.SharePod, isGPUPod bool, podManagerIP string, 
 	for key, val := range sharepod.ObjectMeta.Annotations {
 		annotationCopy[key] = val
 	}
+	specCopy.SchedulerName = schedulerName
 	if isGPUPod {
+		klog.V(4).Infof("[RIYACHU] isGPUPod : %t\n", isGPUPod)
 		// specCopy.Containers = append(specCopy.Containers, corev1.Container{
 		// 	Name:    "podmanager",
 		// 	Image:   "ncy9371/debian:stretch-slim-wget",
@@ -528,6 +574,7 @@ func newPod(sharepod *sharedgpuv1.SharePod, isGPUPod bool, podManagerIP string, 
 				},
 			},
 		)
+
 		annotationCopy[sharedgpuv1.KubeShareResourceGPURequest] = sharepod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPURequest]
 		annotationCopy[sharedgpuv1.KubeShareResourceGPULimit] = sharepod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPULimit]
 		annotationCopy[sharedgpuv1.KubeShareResourceGPUMemory] = sharepod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPUMemory]

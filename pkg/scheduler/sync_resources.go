@@ -7,13 +7,19 @@ import (
 	"sync"
 
 	sharedgpuv1 "KubeShare/pkg/apis/sharedgpu/v1"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog"
 )
 
 func syncClusterResources(nodeList []*corev1.Node, podList []*corev1.Pod, sharePodList []*sharedgpuv1.SharePod) (nodeResources NodeResources) {
 	nodeResources = syncNodeResources(nodeList)
+
+	klog.V(4).Infof("[RIYACHU] Node Resource Check\n")
+	nodeResources.PrintMe()
 	syncPodResources(nodeResources, podList, sharePodList)
+	klog.V(4).Infof("[RIYACHU] after sync pod resource \n")
+	nodeResources.PrintMe()
 	return
 }
 
@@ -56,6 +62,8 @@ func syncPodResources(nodeRes NodeResources, podList []*corev1.Pod, sharePodList
 			nodeRes[nodeName].MemFree -= container.Resources.Requests.Memory().MilliValue()
 			gpu := container.Resources.Requests[sharedgpuv1.ResourceNVIDIAGPU]
 			nodeRes[nodeName].GpuFreeCount -= int(gpu.Value())
+			klog.V(4).Infof("[RIYACHU] the container of Pod : %v\n", container.Name)
+			nodeRes.PrintMe()
 		}
 	}
 
@@ -85,6 +93,9 @@ func syncPodResources(nodeRes NodeResources, podList []*corev1.Pod, sharePodList
 		for _, container := range sharePod.Spec.Containers {
 			nodeRes[nodeName].CpuFree -= container.Resources.Requests.Cpu().MilliValue()
 			nodeRes[nodeName].MemFree -= container.Resources.Requests.Memory().MilliValue()
+
+			klog.V(4).Infof("[RIYACHU] the container of sharepod : %v\n", container.Name)
+			nodeRes.PrintMe()
 		}
 
 		isGPUPod := false
@@ -95,6 +106,7 @@ func syncPodResources(nodeRes NodeResources, podList []*corev1.Pod, sharePodList
 		affinityTag := ""
 		antiAffinityTag := ""
 		exclusionTag := ""
+		gpu_mem_set := false
 
 		if sharePod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPURequest] != "" ||
 			sharePod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPULimit] != "" ||
@@ -109,9 +121,14 @@ func syncPodResources(nodeRes NodeResources, podList []*corev1.Pod, sharePodList
 			if err != nil || gpu_request > gpu_limit || gpu_request < 0.0 {
 				continue
 			}
-			gpu_mem, err = strconv.ParseInt(sharePod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPUMemory], 10, 64)
-			if err != nil || gpu_mem < 0 {
-				continue
+			// TODO: string  == nil
+			gpu_mem_annotation := sharePod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPUMemory]
+			if gpu_mem_annotation != "" {
+				gpu_mem_set = true
+				gpu_mem, err = strconv.ParseInt(gpu_mem_annotation, 10, 64)
+				if err != nil || gpu_mem < 0 {
+					continue
+				}
 			}
 			GPUID = sharePod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPUID]
 			isGPUPod = true
@@ -129,11 +146,18 @@ func syncPodResources(nodeRes NodeResources, podList []*corev1.Pod, sharePodList
 
 		if isGPUPod {
 			if gpuInfo, ok := nodeRes[nodeName].GpuFree[GPUID]; !ok {
+				if gpu_mem_set {
+					totalGpuMem := nodeRes[nodeName].GpuTotal
+					gpu_mem = int64(math.Ceil(gpu_request * (float64)(totalGpuMem)))
+				}
+				klog.V(4).Infoln("[RIYACHU] gpuinfo didn't exist")
+				klog.V(4).Infoln("[RIYACHU] gpu mem: ", gpu_mem)
 				if nodeRes[nodeName].GpuFreeCount > 0 {
 					nodeRes[nodeName].GpuFreeCount--
+
 					nodeRes[nodeName].GpuFree[GPUID] = &GPUInfo{
 						GPUFreeReq: 1000 - int64(math.Ceil(gpu_request*(float64)(1000.0))),
-						GPUFreeMem: nodeRes[nodeName].GpuMemTotal - gpu_mem,
+						GPUFreeMem: nodeRes[nodeName].GpuMemTotal - gpu_mem, //TODO: something weird by riya
 					}
 				} else {
 					klog.Errorf("==================================")
@@ -147,6 +171,12 @@ func syncPodResources(nodeRes NodeResources, podList []*corev1.Pod, sharePodList
 					continue
 				}
 			} else {
+				if gpu_mem_set {
+					totalGpuMem := nodeRes[nodeName].GpuTotal
+					gpu_mem = int64(math.Ceil(gpu_request * (float64)(totalGpuMem)))
+				}
+				klog.V(4).Infoln("[RIYACHU] gpuinfo  exists")
+				klog.V(4).Infoln("[RIYACHU] gpu mem: ", gpu_mem)
 				gpuInfo.GPUFreeReq -= int64(math.Ceil(gpu_request * (float64)(1000.0)))
 				gpuInfo.GPUFreeMem -= gpu_mem
 			}
@@ -218,6 +248,7 @@ func syncNodeResources(nodeList []*corev1.Node) (nodeResources NodeResources) {
 			return int(tmp.Value())
 		}()
 		gpuMem := func() int64 {
+			// TODO: currently only support same gpus in node
 			if gpuInfo, ok := node.ObjectMeta.Annotations[sharedgpuv1.KubeShareNodeGPUInfo]; ok {
 				gpuInfoArr := strings.Split(gpuInfo, ",")
 				if len(gpuInfoArr) >= 1 {
@@ -250,6 +281,7 @@ func syncNodeResources(nodeList []*corev1.Node) (nodeResources NodeResources) {
 			GpuFreeCount: gpuNum,
 			GpuFree:      make(map[string]*GPUInfo, gpuNum),
 		}
+
 		nodeResourcesMux.Unlock()
 		wait.Done()
 	}
@@ -261,3 +293,36 @@ func syncNodeResources(nodeList []*corev1.Node) (nodeResources NodeResources) {
 	wait.Wait()
 	return
 }
+
+/*
+func PrintNodeInfo(nodeResources NodeResources) {
+	// Check the node resource
+
+	for key, val := range nodeResources {
+		klog.V(4).Infof("[RIYACHU] Node Resource Check: %v\n", key)
+		klog.V(4).Infof("---------------------------------------------------------\n")
+		klog.V(4).Infof("CpuTotal: %v\n", val.CpuTotal)
+		klog.V(4).Infof("MemTotal: %v\n", val.MemTotal)
+		klog.V(4).Infof("GpuTotal: %v\n", val.GpuTotal)
+		klog.V(4).Infof("GpuMemTotal: %v\n", val.GpuMemTotal)
+		klog.V(4).Infof("CpuFree: %v\n", val.CpuFree)
+		klog.V(4).Infof("MemFree: %v\n", val.MemFree)
+		klog.V(4).Infof("GpuFreeCount: %v\n", val.GpuFreeCount)
+		klog.V(4).Infof("GpuFree: %v\n", val.GpuFree)
+		klog.V(4).Infof("---------------------------------------------------------\n")
+	}
+
+	// Check the node resource
+	// klog.V(4).Infof("[RIYACHU] Node Resource Check: %v\n", node.ObjectMeta.Name)
+	// klog.V(4).Infof("---------------------------------------------------------\n")
+	// klog.V(4).Infof("CpuTotal: %v\n", nodeResources[node.ObjectMeta.Name].CpuTotal)
+	// klog.V(4).Infof("MemTotal: %v\n", nodeResources[node.ObjectMeta.Name].MemTotal)
+	// klog.V(4).Infof("GpuTotal: %v\n", nodeResources[node.ObjectMeta.Name].GpuTotal)
+	// klog.V(4).Infof("GpuMemTotal: %v\n", nodeResources[node.ObjectMeta.Name].GpuMemTotal)
+	// klog.V(4).Infof("CpuFree: %v\n", nodeResources[node.ObjectMeta.Name].CpuFree)
+	// klog.V(4).Infof("MemFree: %v\n", nodeResources[node.ObjectMeta.Name].MemFree)
+	// klog.V(4).Infof("GpuFreeCount: %v\n", nodeResources[node.ObjectMeta.Name].GpuFreeCount)
+	// klog.V(4).Infof("GpuFree: %v\n", nodeResources[node.ObjectMeta.Name].GpuFree)
+	// klog.V(4).Infof("---------------------------------------------------------\n")
+}
+*/
