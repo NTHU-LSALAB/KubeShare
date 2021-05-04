@@ -218,7 +218,7 @@ func (c *Controller) syncHandler(key string) error {
 	gpu_request := 0.0
 	gpu_limit := 0.0
 	gpu_mem := int64(0)
-	//gpu_mem_set := false
+	gpu_mem_set := false
 
 	if sharepod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPURequest] != "" ||
 		sharepod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPULimit] != "" ||
@@ -243,7 +243,7 @@ func (c *Controller) syncHandler(key string) error {
 		// TODO:  string  == nil
 		gpu_mem_annotation := sharepod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPUMemory]
 		if gpu_mem_annotation != "" {
-			//gpu_mem_set = true
+			gpu_mem_set = true
 			gpu_mem, err = strconv.ParseInt(sharepod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPUMemory], 10, 64)
 			if err != nil || gpu_mem < 0 {
 				if sharepod, errr = c.updateSharePodStatus(sharepod, sharedgpuv1.SharePodFailed, "The gpu_mem value error"); errr != nil {
@@ -274,7 +274,7 @@ func (c *Controller) syncHandler(key string) error {
 		return err
 	}
 	// TODO: when gpu_mem == 0
-	schedNode, schedGPUID := scheduleSharePod(isGPUPod, gpu_request, gpu_mem, sharepod, nodeList, podList, sharePodList)
+	schedNode, schedGPUID, gpu_mem := scheduleSharePod(isGPUPod, gpu_request, gpu_mem, gpu_mem_set, sharepod, nodeList, podList, sharePodList)
 	if schedNode == "" {
 		klog.Infof("No enough resources for SharePod: %s/%s", sharepod.ObjectMeta.Namespace, sharepod.ObjectMeta.Name)
 
@@ -287,6 +287,13 @@ func (c *Controller) syncHandler(key string) error {
 		c.pendingList.PushBack(key)
 		c.pendingListMux.Unlock()
 		return nil
+	} else {
+		klog.Infoln("[RIYACHU]sharePod: ", sharepod.Namespace, "/", sharepod.Name)
+		shp, err := c.updateSharePodGpuMem(sharepod, strconv.FormatInt(gpu_mem, 10))
+		sharepod = shp
+		if err != nil {
+			klog.Errorf("update annotation error: %v", err)
+		}
 	}
 
 	klog.Infof("SharePod '%s' had been scheduled to node '%s' GPUID '%s'.", key, schedNode, schedGPUID)
@@ -359,4 +366,19 @@ func (c *Controller) resourceChanged(obj interface{}) {
 	}
 	c.pendingList.Init()
 	c.pendingListMux.Unlock()
+}
+
+func (c *Controller) updateSharePodGpuMem(sharepod *sharedgpuv1.SharePod, gpuMem string) (*sharedgpuv1.SharePod, error) {
+	klog.V(4).Infof("[RIYACHU] updateSharePodGpuMem\n")
+
+	sharepodCopy := sharepod.DeepCopy()
+	sharepodCopy.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPUMemory] = gpuMem
+
+	klog.Infoln("sharePod: ", sharepodCopy.Namespace, "/", sharepodCopy.Name)
+	for key, val := range sharepodCopy.ObjectMeta.Annotations {
+		klog.Infof("Annotation=  %v  : %v\n", key, val)
+	}
+
+	shp, err := c.kubeshareclientset.SharedgpuV1().SharePods(sharepodCopy.Namespace).Update(sharepodCopy)
+	return shp, err
 }

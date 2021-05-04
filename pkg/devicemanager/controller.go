@@ -300,6 +300,8 @@ func (c *Controller) syncHandler(key string) error {
 
 			return nil
 		}
+		//gpu_mem_annotation := sharepod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPUMemory]
+
 		gpu_mem, err = strconv.ParseInt(sharepod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPUMemory], 10, 64)
 		if err != nil || gpu_mem < 0 {
 			utilruntime.HandleError(fmt.Errorf("SharePod %s/%s gpu_mem value error: %s", sharepod.ObjectMeta.Namespace, sharepod.ObjectMeta.Name, sharedgpuv1.KubeShareResourceGPUMemory))

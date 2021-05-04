@@ -5,10 +5,12 @@ import (
 	"sync"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/klog"
+
 	sharedgpuv1 "KubeShare/pkg/apis/sharedgpu/v1"
 )
 
-func scheduleSharePod(isGPUPod bool, gpu_request float64, gpu_mem int64, sharepod *sharedgpuv1.SharePod, nodeList []*corev1.Node, podList []*corev1.Pod, sharePodList []*sharedgpuv1.SharePod) (string, string) {
+func scheduleSharePod(isGPUPod bool, gpu_request float64, gpu_mem int64, gpu_mem_set bool, sharepod *sharedgpuv1.SharePod, nodeList []*corev1.Node, podList []*corev1.Pod, sharePodList []*sharedgpuv1.SharePod) (string, string, int64) {
 
 	// Implement custom scheduling algorithm and replace the function assignment
 	// Prototype: FUNC(bool, string, *sharedgpuv1.SharePod, NodeResources) (string, string, error)
@@ -18,28 +20,31 @@ func scheduleSharePod(isGPUPod bool, gpu_request float64, gpu_mem int64, sharepo
 	for _, filter := range filters {
 		filter(nodeResources, sharepod)
 	}
-	return ap(isGPUPod, gpu_request, gpu_mem, sharepod, nodeResources)
+	return ap(isGPUPod, gpu_request, gpu_mem, gpu_mem_set, sharepod, nodeResources)
 }
 
-func ScheduleAlgorithmBestFit(isGPUPod bool, gpu_request float64, gpu_mem int64, sharepod *sharedgpuv1.SharePod, nodeResources NodeResources) (schedNodeName string, schedGPUID string) {
+func ScheduleAlgorithmBestFit(isGPUPod bool, gpu_request float64, gpu_mem int64, gpu_mem_set bool, sharepod *sharedgpuv1.SharePod, nodeResources NodeResources) (schedNodeName string, schedGPUID string, schedPodMem int64) {
 	type candidateNodeGPU struct {
-		NodeName string
-		GPUID    string
-		Point    int64
+		NodeName  string
+		GPUID     string
+		Point     int64
+		podGPUMem int64
 	}
 
 	bestNode := candidateNodeGPU{
-		Point:    2147483647,
-		NodeName: "",
-		GPUID:    "",
+		Point:     2147483647,
+		NodeName:  "",
+		GPUID:     "",
+		podGPUMem: 0,
 	}
 	var bestNodeMux sync.Mutex
-	tryBestNode := func(point int64, nodeName, GPUID string) {
+	tryBestNode := func(point int64, nodeName, GPUID string, gpu_mem int64) {
 		bestNodeMux.Lock()
 		if point < bestNode.Point {
 			bestNode.Point = point
 			bestNode.NodeName = nodeName
 			bestNode.GPUID = GPUID
+			bestNode.podGPUMem = gpu_mem
 		}
 		bestNodeMux.Unlock()
 	}
@@ -54,7 +59,16 @@ func ScheduleAlgorithmBestFit(isGPUPod bool, gpu_request float64, gpu_mem int64,
 
 	var wait sync.WaitGroup
 
-	scheduleNode := func(nodeName string, nodeRes *NodeResource) {
+	scheduleNode := func(nodeName string, nodeRes *NodeResource, gpu_mem_set bool) {
+
+		if !gpu_mem_set {
+			totalGpuMem := nodeRes.GpuMemTotal
+			gpu_mem = int64(math.Ceil(gpu_request * (float64)(totalGpuMem)))
+			klog.V(4).Infoln("[RIYACHU] Judge-gpu request: ", gpu_request)
+			klog.V(4).Infoln("[RIYACHU] Judge-gpu mem: ", gpu_mem)
+			klog.V(4).Infoln("[RIYACHU] Judge-total gpu mem: ", (float64)(totalGpuMem))
+		}
+
 		if nodeRes.CpuFree < cpuReqTotal || nodeRes.MemFree < memReqTotal {
 			wait.Done()
 			return
@@ -66,24 +80,28 @@ func ScheduleAlgorithmBestFit(isGPUPod bool, gpu_request float64, gpu_mem int64,
 					continue
 				}
 				findTheHole = true
-				tryBestNode(gpu.GPUFreeReq-gpu_request_millivalue, nodeName, id)
+				tryBestNode(gpu.GPUFreeReq-gpu_request_millivalue, nodeName, id, gpu_mem)
 			}
 			if !findTheHole {
 				if nodeRes.GpuFreeCount > 0 {
-					tryBestNode(1000-gpu_request_millivalue, nodeName, sharedgpuv1.NewGPUID(5))
+					tryBestNode(1000-gpu_request_millivalue, nodeName, sharedgpuv1.NewGPUID(5), gpu_mem)
 				}
 			}
+			if !gpu_mem_set {
+				klog.V(4).Infoln("[RIYACHU] Change Default gpu mem according to gpu_request")
+				klog.V(4).Infoln("[RIYACHU] gpu mem: ", gpu_mem)
+			}
 		} else {
-			tryBestNode(nodeRes.CpuFree-cpuReqTotal, nodeName, "")
+			tryBestNode(nodeRes.CpuFree-cpuReqTotal, nodeName, "", gpu_mem)
 		}
 		wait.Done()
 	}
 
 	wait.Add(len(nodeResources))
 	for nodeName, nodeRes := range nodeResources {
-		go scheduleNode(nodeName, nodeRes)
+		go scheduleNode(nodeName, nodeRes, gpu_mem_set)
 	}
 	wait.Wait()
 
-	return bestNode.NodeName, bestNode.GPUID
+	return bestNode.NodeName, bestNode.GPUID, bestNode.podGPUMem
 }
