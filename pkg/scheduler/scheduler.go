@@ -18,7 +18,7 @@ func scheduleSharePod(isGPUPod bool, gpu_request float64, gpu_mem int64, gpu_mem
 
 	nodeResources := syncClusterResources(nodeList, podList, sharePodList)
 	for _, filter := range filters {
-		filter(nodeResources, sharepod)
+		filter(nodeResources, nodeList, sharepod)
 	}
 	return ap(isGPUPod, gpu_request, gpu_mem, gpu_mem_set, sharepod, nodeResources)
 }

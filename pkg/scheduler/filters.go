@@ -2,15 +2,19 @@ package scheduler
 
 import (
 	sharedgpuv1 "KubeShare/pkg/apis/sharedgpu/v1"
+
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/klog"
 )
 
-var filters = []func(NodeResources, *sharedgpuv1.SharePod){
+var filters = []func(NodeResources, []*corev1.Node, *sharedgpuv1.SharePod){
 	GPUAffinityFilter,
 	GPUAntiAffinityFilter,
 	GPUExclusionFilter,
+	NodeSelectorFilter,
 }
 
-func GPUAffinityFilter(nodeResources NodeResources, sharepod *sharedgpuv1.SharePod) {
+func GPUAffinityFilter(nodeResources NodeResources, nodeList []*corev1.Node, sharepod *sharedgpuv1.SharePod) {
 	affinityTag := ""
 	if val, ok := sharepod.ObjectMeta.Annotations[KubeShareScheduleAffinity]; ok {
 		affinityTag = val
@@ -33,7 +37,7 @@ func GPUAffinityFilter(nodeResources NodeResources, sharepod *sharedgpuv1.ShareP
 	}
 }
 
-func GPUExclusionFilter(nodeResources NodeResources, sharepod *sharedgpuv1.SharePod) {
+func GPUExclusionFilter(nodeResources NodeResources, nodeList []*corev1.Node, sharepod *sharedgpuv1.SharePod) {
 	exclusionTag := ""
 	if val, ok := sharepod.ObjectMeta.Annotations[KubeShareScheduleExclusion]; ok {
 		exclusionTag = val
@@ -55,7 +59,7 @@ func GPUExclusionFilter(nodeResources NodeResources, sharepod *sharedgpuv1.Share
 	}
 }
 
-func GPUAntiAffinityFilter(nodeResources NodeResources, sharepod *sharedgpuv1.SharePod) {
+func GPUAntiAffinityFilter(nodeResources NodeResources, nodeList []*corev1.Node, sharepod *sharedgpuv1.SharePod) {
 	antiAffinityTag := ""
 	if val, ok := sharepod.ObjectMeta.Annotations[KubeShareScheduleAntiAffinity]; ok {
 		antiAffinityTag = val
@@ -72,4 +76,21 @@ func GPUAntiAffinityFilter(nodeResources NodeResources, sharepod *sharedgpuv1.Sh
 			}
 		}
 	}
+}
+
+func NodeSelectorFilter(nodeResources NodeResources, nodeList []*corev1.Node, sharepod *sharedgpuv1.SharePod) {
+
+	sharePodLabels := sharepod.Spec.NodeSelector
+
+	for i := range nodeList {
+		label := nodeList[i].ObjectMeta.Labels
+		for key, val := range sharePodLabels {
+			if label[key] != val {
+				delete(nodeResources, nodeList[i].Name)
+				klog.Infoln("[RIYACHU] Delete Node: ", nodeList[i].Name)
+				break
+			}
+		}
+	}
+	//nodeResources[node.ObjectMeta.Name]
 }
