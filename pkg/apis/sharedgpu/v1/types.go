@@ -43,11 +43,13 @@ const (
 	KubeShareResourceGPURequest = "sharedgpu/gpu_request"
 	KubeShareResourceGPULimit   = "sharedgpu/gpu_limit"
 	KubeShareResourceGPUMemory  = "sharedgpu/gpu_mem"
+	KubeShareResourceGPUModel   = "sharedgpu/gpu_model"
 	KubeShareResourceGPUID      = "sharedgpu/GPUID"
 	KubeShareDummyPodName       = "sharedgpu-vgpu"
 	KubeShareNodeName           = "sharedgpu/nodeName"
 	KubeShareRole               = "sharedgpu/role"
 	KubeShareNodeGPUInfo        = "sharedgpu/gpu_info"
+	KubeShareNodeGPUModel       = "sharedgpu/gpu_model_info"
 	ResourceNVIDIAGPU           = "nvidia.com/gpu"
 
 	// Phase : the condition of a sharepod at the current time

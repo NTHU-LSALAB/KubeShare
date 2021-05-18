@@ -101,6 +101,21 @@ func clientHandler(conn net.Conn) {
 	}
 	nodeName = pod.Spec.NodeName
 
+	nvidiaDviceModelMsg, err := reader.ReadString('\n')
+	if err != nil {
+		klog.Errorf("Error when receive nvidia device model from client")
+		return
+	}
+	var nvidiaDviceModelStr string
+	if tmp := strings.Split(string(nvidiaDviceModelMsg), ":"); tmp[0] != "NvidiaDeviceModel" {
+		klog.Errorf("Wrong identification when receving nvidia device model\n")
+		return
+	} else {
+		nvidiaDviceModelStr = tmp[1][:len(tmp[1])-1]
+	}
+
+	klog.Infof("Receive device model from node: %s, model: %s", nodeName, nvidiaDviceModelStr)
+
 	nvidiaDevicesMsg, err := reader.ReadString('\n')
 	if err != nil {
 		klog.Errorf("Error when receive nvidia devices list from client")
@@ -132,6 +147,7 @@ func clientHandler(conn net.Conn) {
 			UUID2Port:            uuid2port,
 			PodIP:                podIP,
 			PodManagerPortBitmap: bm,
+			GPUModel:             nvidiaDviceModelStr,
 		}
 	} else {
 		node.UUID2Port = uuid2port
@@ -155,7 +171,7 @@ func clientHandler(conn net.Conn) {
 	}
 	nodeStatusMux.Unlock()
 
-	UpdateNodeGPUInfo(nodeName, &uuid2mem)
+	UpdateNodeGPUInfo(nodeName, &uuid2mem, nvidiaDviceModelStr)
 
 	nodesInfoMux.Lock()
 	for _, gpuinfo := range nodesInfo[nodeName].GPUID2GPU {
@@ -190,7 +206,7 @@ func clientHandler(conn net.Conn) {
 	}
 }
 
-func UpdateNodeGPUInfo(nodeName string, uuid2mem *map[string]string) {
+func UpdateNodeGPUInfo(nodeName string, uuid2mem *map[string]string, nvidiaDviceModel string) {
 	var buf bytes.Buffer
 	for id, d := range *uuid2mem {
 		buf.WriteString(id)
@@ -209,6 +225,8 @@ func UpdateNodeGPUInfo(nodeName string, uuid2mem *map[string]string) {
 	gpuinfo := buf.String()
 	newNode.ObjectMeta.Annotations[sharedgpuv1.KubeShareNodeGPUInfo] = gpuinfo
 	klog.Infof("Update node %s GPU info: %s", nodeName, gpuinfo)
+	newNode.ObjectMeta.Annotations[sharedgpuv1.KubeShareNodeGPUModel] = nvidiaDviceModel
+	klog.Infof("Update node %s GPU Model info: %s", nodeName, nvidiaDviceModel)
 	_, err = kubeClient.CoreV1().Nodes().Update(newNode)
 	if err != nil {
 		klog.Errorf("Error when updating Node %s annotation, err: %s, spec: %v", nodeName, err, newNode)

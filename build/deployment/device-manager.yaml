@@ -125,7 +125,7 @@ spec:
           mountPath: /tmp
       containers:
       - name: config-client
-        image: riyazhu/kubeshare-config-client
+        image: riyazhu/kubeshare-config-client:develop
         env:
         - name: KUBESHARE_SCHEDULER_IP
           valueFrom:

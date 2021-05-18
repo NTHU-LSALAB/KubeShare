@@ -47,6 +47,8 @@ type NodeInfo struct {
 	// port in use
 	PodManagerPortBitmap *bitmap.RRBitmap
 	PodIP                string
+
+	GPUModel string
 }
 
 var (

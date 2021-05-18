@@ -15,8 +15,8 @@ import (
 )
 
 const (
-	SchedulerIpPath = "/kubeshare/library/schedulerIP.txt"
-	SchedulerGPUConfigPath = "/kubeshare/scheduler/config/"
+	SchedulerIpPath                = "/kubeshare/library/schedulerIP.txt"
+	SchedulerGPUConfigPath         = "/kubeshare/scheduler/config/"
 	SchedulerGPUPodManagerPortPath = "/kubeshare/scheduler/podmanagerport/"
 
 	SchedulerPodIpEnvName = "KUBESHARE_SCHEDULER_IP"
@@ -51,12 +51,30 @@ func Run(server string) {
 
 	writeStringToConn(conn, "hostname:"+hostname+"\n")
 
+	registerGPUMode(conn)
+
 	registerDevices(conn)
 
 	timer := time.NewTicker(time.Second * 15)
 	go sendHeartbeat(conn, timer.C)
 
 	recvRequest(reader)
+}
+
+func registerGPUMode(conn net.Conn) {
+	num, err := nvml.GetDeviceCount()
+	if err != nil {
+		klog.Fatalf("Error when get nvidia device in GetDeviceCount(): %s", err)
+	}
+	if num >= 1 {
+		d, err := nvml.NewDevice(0)
+		if err != nil {
+			klog.Errorf("Error when get nvidia device's details: %s", err)
+		}
+		model := *d.Model
+		klog.Info("NvidiaDeviceModel:" + model + "\n")
+		writeStringToConn(conn, "NvidiaDeviceModel:"+model+"\n")
+	}
 }
 
 func registerDevices(conn net.Conn) {
@@ -105,12 +123,12 @@ func handleRequest(r string) {
 
 	gpu_config_f, err := os.Create(SchedulerGPUConfigPath + UUID)
 	if err != nil {
-		klog.Errorf("Error when create config file on path: %s", SchedulerGPUConfigPath + UUID)
+		klog.Errorf("Error when create config file on path: %s", SchedulerGPUConfigPath+UUID)
 	}
-	
+
 	podmanager_port_f, err := os.Create(SchedulerGPUPodManagerPortPath + UUID)
 	if err != nil {
-		klog.Errorf("Error when create config file on path: %s", SchedulerGPUPodManagerPortPath + UUID)
+		klog.Errorf("Error when create config file on path: %s", SchedulerGPUPodManagerPortPath+UUID)
 	}
 
 	gpu_config_f.WriteString(fmt.Sprintf("%d\n", strings.Count(podlist, ",")))

@@ -32,16 +32,12 @@ Share GPU between Pods in Kubernetes
 
 ### Installation
 ```
-kubectl create -f https://lsalab.cs.nthu.edu.tw/~ericyeh/KubeShare/v0.9/crd.yaml
-kubectl create -f https://lsalab.cs.nthu.edu.tw/~ericyeh/KubeShare/v0.9/device-manager.yaml
-kubectl create -f https://lsalab.cs.nthu.edu.tw/~ericyeh/KubeShare/v0.9/scheduler.yaml
+kubectl apply -f  build/deployment/
 ```
 
 ### Uninstallation
 ```
-kubectl delete -f https://lsalab.cs.nthu.edu.tw/~ericyeh/KubeShare/v0.9/crd.yaml
-kubectl delete -f https://lsalab.cs.nthu.edu.tw/~ericyeh/KubeShare/v0.9/device-manager.yaml
-kubectl delete -f https://lsalab.cs.nthu.edu.tw/~ericyeh/KubeShare/v0.9/scheduler.yaml
+kubectl delete -f build/deployment/
 ```
 
 ## SharePod
@@ -58,17 +54,17 @@ kubectl delete -f https://lsalab.cs.nthu.edu.tw/~ericyeh/KubeShare/v0.9/schedule
 
 ### SharePod Specification
 ```
-apiVersion: kubeshare.nthu/v1
+apiVersion: sharedgpu.goc/v1
 kind: SharePod
 metadata:
   name: sharepod1
   annotations:
-    "kubeshare/gpu_request": "0.5" # required if allocating GPU
-    "kubeshare/gpu_limit": "1.0" # required if allocating GPU
-    "kubeshare/gpu_mem": "1073741824" # required if allocating GPU # 1Gi, in bytes
-    "kubeshare/sched_affinity": "red" # optional
-    "kubeshare/sched_anti-affinity": "green" # optional
-    "kubeshare/sched_exclusion": "blue" # optional
+    "sharedgpu/gpu_request": "0.5" # required if allocating GPU
+    "sharedgpu/gpu_limit": "1.0" # required if allocating GPU
+    "sharedgpu/gpu_mem": "1073741824" # required if allocating GPU # 1Gi, in bytes
+    "sharedgpu/sched_affinity": "red" # optional
+    "sharedgpu/sched_anti-affinity": "green" # optional
+    "sharedgpu/sched_exclusion": "blue" # optional
 spec: # PodSpec
   containers:
   - name: cuda
@@ -80,14 +76,14 @@ spec: # PodSpec
         memory: "500Mi"
 ```
 Because floating point custom device requests is forbidden by K8s, we move GPU resource usage definitions to Annotations.
-* kubeshare/gpu_request (required if allocating GPU): guaranteed GPU usage of Pod, gpu_request <= "1.0".
-* kubeshare/gpu_limit (required if allocating GPU): maximum extra usage if GPU still has free resources, gpu_request <= gpu_limit <= "1.0".
-* kubeshare/gpu_mem (required if allocating GPU): maximum GPU memory usage of Pod, in bytes.
+* sharedgpu/gpu_request (required if allocating GPU): guaranteed GPU usage of Pod, gpu_request <= "1.0".
+* sharedgpu/gpu_limit (required if allocating GPU): maximum extra usage if GPU still has free resources, gpu_request <= gpu_limit <= "1.0".
+* sharedgpu/gpu_mem (required if allocating GPU): maximum GPU memory usage of Pod, in bytes.
 * spec (required): a normal PodSpec definition to be running in K8s.
-* kubeshare/sched_affinity (optional): only schedules SharePod with same sched_affinity label or schedules to an idle GPU.
-* kubeshare/sched_anti-affinity (optional): do not schedules SharedPods together which have the same sched_anti-affinity label.
-* kubeshare/sched_exclusion (optional): only one sched_exclusion label exists on a device, including empty label.
-
+* sharedgpu/sched_affinity (optional): only schedules SharePod with same sched_affinity label or schedules to an idle GPU.
+* sharedgpu/sched_anti-affinity (optional): do not schedules SharedPods together which have the same sched_anti-affinity label.
+* sharedgpu/sched_exclusion (optional): only one sched_exclusion label exists on a device, including empty label.
+* sharedgpu/gpu_model_info (optional): only assign pod to the node with dedicated gpu model e.g. GeForce GTX 1080
 ### SharePod usage demo clip
 
 All yaml files in clip are located in REPO_ROOT/doc/yaml.
@@ -98,15 +94,15 @@ All yaml files in clip are located in REPO_ROOT/doc/yaml.
 Follow this section to understand how to locate a SharePod on a GPU which is used by others.  
 kubeshare-scheduler fills metadata.annotations["kubeshare/GPUID"] and spec.nodeName to schedule a SharePod.
 ```
-apiVersion: kubeshare.nthu/v1
+apiVersion: sharedgpu.goc/v1
 kind: SharePod
 metadata:
   name: sharepod1
   annotations:
-    "kubeshare/gpu_request": "0.5"
-    "kubeshare/gpu_limit": "1.0"
-    "kubeshare/gpu_mem": "1073741824" # 1Gi, in bytes
-    "kubeshare/GPUID": "abcde"
+    "sharedgpu/gpu_request": "0.5"
+    "sharedgpu/gpu_limit": "1.0"
+    "sharedgpu/gpu_mem": "1073741824" # 1Gi, in bytes
+    "sharedgpu/GPUID": "abcde"
 spec: # PodSpec
   nodeName: node01
   containers:

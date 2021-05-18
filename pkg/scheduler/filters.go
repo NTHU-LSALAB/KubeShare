@@ -12,6 +12,7 @@ var filters = []func(NodeResources, []*corev1.Node, *sharedgpuv1.SharePod){
 	GPUAntiAffinityFilter,
 	GPUExclusionFilter,
 	NodeSelectorFilter,
+	GPUModelFilter,
 }
 
 func GPUAffinityFilter(nodeResources NodeResources, nodeList []*corev1.Node, sharepod *sharedgpuv1.SharePod) {
@@ -92,5 +93,26 @@ func NodeSelectorFilter(nodeResources NodeResources, nodeList []*corev1.Node, sh
 			}
 		}
 	}
-	//nodeResources[node.ObjectMeta.Name]
+}
+
+func GPUModelFilter(nodeResources NodeResources, nodeList []*corev1.Node, sharepod *sharedgpuv1.SharePod) {
+	gpuModelTag := ""
+	if val, ok := sharepod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPUModel]; ok {
+		gpuModelTag = val
+	} else {
+		return
+	}
+
+	for i := range nodeList {
+		if nodeGpuModel, ok := nodeList[i].ObjectMeta.Annotations[sharedgpuv1.KubeShareNodeGPUModel]; ok {
+			if nodeGpuModel != gpuModelTag {
+				delete(nodeResources, nodeList[i].Name)
+				klog.Infof("[RIYACHU] Delete Node %v with gpu card: %v\n", nodeList[i].Name, nodeGpuModel)
+			}
+
+		} else {
+			delete(nodeResources, nodeList[i].Name)
+			klog.Infof("[RIYACHU] Delete Node %v: can't find gpu model\n", nodeList[i].Name)
+		}
+	}
 }
