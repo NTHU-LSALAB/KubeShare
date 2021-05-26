@@ -1,0 +1,143 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kubeshare-device-manager
+  namespace: kube-system
+
+---
+
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: kubeshare-device-manager
+rules:
+- apiGroups: [""]
+  resources: ["*"]
+  verbs: ["*"]
+- apiGroups: ["kubeshare.nthu"]
+  resources: ["*"]
+  verbs: ["*"]
+
+---
+
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: kubeshare-device-manager
+subjects:
+- kind: ServiceAccount
+  name: kubeshare-device-manager
+  namespace: kube-system
+roleRef:
+  kind: ClusterRole
+  name: kubeshare-device-manager
+  apiGroup: rbac.authorization.k8s.io
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: kubeshare-device-manager
+  namespace: kube-system
+spec:
+  type: ClusterIP
+  selector:
+    app: kubeshare-device-manager
+  ports:
+  - name: controller
+    port: 9797
+    targetPort: 9797
+
+---
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: kubeshare-device-manager
+  namespace: kube-system
+  annotations:
+    scheduler.alpha.kubernetes.io/critical-pod: ""
+  labels:
+    app: kubeshare-device-manager
+spec:
+  serviceAccountName: kubeshare-device-manager
+  priorityClassName: system-node-critical
+  tolerations:
+  - key: "CriticalAddonsOnly"
+    operator: "Exists"
+  - key: "node-role.kubernetes.io/master"
+    operator: "Exists"
+    effect: "NoSchedule"
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: "node-role.kubernetes.io/master"
+            operator: "Exists"
+  restartPolicy: Always
+  containers:
+  - name: kubeshare-device-manager
+    image: ncy9371/kubeshare-device-manager:20200429135835
+
+---
+
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: kubeshare-node-daemon
+  namespace: kube-system
+  labels:
+    lsalab: kubeshare-node-daemon
+spec:
+  selector:
+    matchLabels:
+      lsalab: kubeshare-node-daemon
+  template:
+    metadata:
+      labels:
+        lsalab: kubeshare-node-daemon
+    spec:
+      terminationGracePeriodSeconds: 0
+      restartPolicy: Always
+      tolerations:
+      - key: node-role.kubernetes.io/master
+        effect: NoSchedule
+      initContainers:
+      - name: gemini-hook-init
+        image: ncy9371/kubeshare-gemini-hook-init:20200429135835
+        volumeMounts:
+        - name: "kubeshare-library"
+          mountPath: /kubeshare/library
+      containers:
+      - name: config-client
+        image: ncy9371/kubeshare-config-client:20200429135835
+        env:
+        - name: KUBESHARE_SCHEDULER_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        volumeMounts:
+        - name: "kubeshare-scheduler"
+          mountPath: "/kubeshare/scheduler"
+        - name: "kubeshare-library"
+          mountPath: "/kubeshare/library"
+      - name: gemini-scheduler
+        image: ncy9371/kubeshare-gemini-scheduler:20200429135835
+        volumeMounts:
+        - name: "kubeshare-scheduler"
+          mountPath: "/kubeshare/scheduler"
+        - name: "kubeshare-library"
+          mountPath: "/kubeshare/library"
+        volumeMounts:
+        - name: "kubeshare-scheduler"
+          mountPath: "/kubeshare/scheduler"
+      volumes:
+      - name: "kubeshare-scheduler"
+        hostPath:
+          path: "/kubeshare/scheduler"
+      - name: "kubeshare-library"
+        hostPath:
+          path: "/kubeshare/library"
+
