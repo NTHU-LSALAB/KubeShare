@@ -32,16 +32,14 @@ Share GPU between Pods in Kubernetes
 
 ### Installation
 ```
-kubectl create -f https://lsalab.cs.nthu.edu.tw/~ericyeh/KubeShare/v0.9/crd.yaml
-kubectl create -f https://lsalab.cs.nthu.edu.tw/~ericyeh/KubeShare/v0.9/device-manager.yaml
-kubectl create -f https://lsalab.cs.nthu.edu.tw/~ericyeh/KubeShare/v0.9/scheduler.yaml
+cd ./deploy
+kubectl apply -f .
 ```
 
 ### Uninstallation
 ```
-kubectl delete -f https://lsalab.cs.nthu.edu.tw/~ericyeh/KubeShare/v0.9/crd.yaml
-kubectl delete -f https://lsalab.cs.nthu.edu.tw/~ericyeh/KubeShare/v0.9/device-manager.yaml
-kubectl delete -f https://lsalab.cs.nthu.edu.tw/~ericyeh/KubeShare/v0.9/scheduler.yaml
+cd ./deploy
+kubectl delete -f .
 ```
 
 ## SharePod
