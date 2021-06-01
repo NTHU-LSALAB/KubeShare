@@ -25,3 +25,4 @@ spec:
             nvidia.com/gpu: 1
         ports:
         - containerPort: 80
+      schedulerName: kubeshare

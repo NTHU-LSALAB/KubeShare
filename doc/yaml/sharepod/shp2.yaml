@@ -1,11 +1,11 @@
-apiVersion: kubeshare.nthu/v1
+apiVersion: sharedgpu.goc/v1
 kind: SharePod
 metadata:
-  name: sharepod4
+  name: shp2
   annotations:
-    "kubeshare/gpu_request": "0.5"
-    "kubeshare/gpu_limit": "1.0"
-    "kubeshare/gpu_mem": "3145728000"
+    "sharedgpu/gpu_request": "0.4"
+    "sharedgpu/gpu_limit": "1.0"
+    "sharedgpu/gpu_mem": "3145728000"
 spec:
   terminationGracePeriodSeconds: 0
   containers:

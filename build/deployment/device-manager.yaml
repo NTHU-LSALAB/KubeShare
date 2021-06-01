@@ -117,7 +117,7 @@ spec:
         effect: NoSchedule
       initContainers:
       - name: gemini-hook-init
-        image: riyazhu/kubeshare-gemini-hook-init #ncy9371/kubeshare-gemini-hook-init:20200429135835
+        image: riyazhu/kubeshare-gemini-hook-init:debug #ncy9371/kubeshare-gemini-hook-init:20200429135835
         volumeMounts:
         - name: "kubeshare-library"
           mountPath: /kubeshare/library  
@@ -139,7 +139,7 @@ spec:
         - name: "exporter"
           mountPath: "/tmp"
       - name: gemini-scheduler
-        image: riyazhu/kubeshare-gemini-scheduler #ncy9371/kubeshare-gemini-scheduler:20200429135835
+        image: riyazhu/kubeshare-gemini-scheduler:debug #ncy9371/kubeshare-gemini-scheduler:20200429135835
         volumeMounts:
         - name: "kubeshare-scheduler"
           mountPath: "/kubeshare/scheduler"

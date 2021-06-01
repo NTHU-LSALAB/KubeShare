@@ -84,6 +84,18 @@ Because floating point custom device requests is forbidden by K8s, we move GPU r
 * sharedgpu/sched_anti-affinity (optional): do not schedules SharedPods together which have the same sched_anti-affinity label.
 * sharedgpu/sched_exclusion (optional): only one sched_exclusion label exists on a device, including empty label.
 * sharedgpu/gpu_model_info (optional): only assign pod to the node with dedicated gpu model e.g. GeForce GTX 1080
+
+We also support the **Node Selector**:  
+If you want to use this feature, please add the label to the node first and add the label in the yaml.  
+
+```yaml=
+  nodeSelector:
+    disktype: ssh
+```
+
+This is the example:  
+[Example](doc/yaml/nodeSelector/t1.yaml)
+
 ### SharePod usage demo clip
 
 All yaml files in clip are located in REPO_ROOT/doc/yaml.
