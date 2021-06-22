@@ -1,6 +1,8 @@
 package scheduler
 
 import (
+	"strconv"
+
 	sharedgpuv1 "KubeShare/pkg/apis/sharedgpu/v1"
 
 	corev1 "k8s.io/api/core/v1"
@@ -13,6 +15,7 @@ var filters = []func(NodeResources, []*corev1.Node, *sharedgpuv1.SharePod){
 	GPUExclusionFilter,
 	NodeSelectorFilter,
 	GPUModelFilter,
+	GPUMemoryFilter,
 }
 
 func GPUAffinityFilter(nodeResources NodeResources, nodeList []*corev1.Node, sharepod *sharedgpuv1.SharePod) {
@@ -39,22 +42,19 @@ func GPUAffinityFilter(nodeResources NodeResources, nodeList []*corev1.Node, sha
 }
 
 func GPUExclusionFilter(nodeResources NodeResources, nodeList []*corev1.Node, sharepod *sharedgpuv1.SharePod) {
-	exclusionTag := ""
-	if val, ok := sharepod.ObjectMeta.Annotations[KubeShareScheduleExclusion]; ok {
-		exclusionTag = val
-	}
+	_, ok := sharepod.ObjectMeta.Annotations[KubeShareScheduleExclusion]
+
 	for _, nodeRes := range nodeResources {
+
 		for GPUID, gpuInfo := range nodeRes.GpuFree {
-			if exclusionTag != "" && len(gpuInfo.GPUExclusionTags) == 0 {
+			// vGPU with the label -> delete gpu candidate
+			if len(gpuInfo.GPUExclusionTags) != 0 {
 				delete(nodeRes.GpuFree, GPUID)
-				break
 			}
-			// len(gpuInfo.GPUExclusionTags) should be only one
-			for _, gpuExclusionTag := range gpuInfo.GPUExclusionTags {
-				if exclusionTag != gpuExclusionTag {
-					delete(nodeRes.GpuFree, GPUID)
-					break
-				}
+			// vGPU without the labe -> delete gpu candidate
+			if len(gpuInfo.GPUExclusionTags) == 0 && ok {
+				klog.Info("[RIYACHU] GPUExclusion: ", gpuInfo.GPUExclusionTags)
+				delete(nodeRes.GpuFree, GPUID)
 			}
 		}
 	}
@@ -114,5 +114,34 @@ func GPUModelFilter(nodeResources NodeResources, nodeList []*corev1.Node, sharep
 			delete(nodeResources, nodeList[i].Name)
 			klog.Infof("[RIYACHU] Delete Node %v: can't find gpu model\n", nodeList[i].Name)
 		}
+	}
+}
+
+func GPUMemoryFilter(nodeResources NodeResources, nodeList []*corev1.Node, sharepod *sharedgpuv1.SharePod) {
+	gpuMemRequest := int64(0)
+
+	if val, ok := sharepod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPUMemory]; ok {
+		gpuMemRequestTemp, err := strconv.ParseInt(val, 10, 64)
+		if err != nil || gpuMemRequestTemp < 0 {
+			return
+		}
+		gpuMemRequest = gpuMemRequestTemp
+	} else {
+		return
+	}
+
+	for nodeName, nodeRes := range nodeResources {
+
+		if nodeRes.GpuMemTotal-gpuMemRequest < 0 {
+			delete(nodeResources, nodeName)
+			continue
+		}
+
+		for GPUID, gpuInfo := range nodeRes.GpuFree {
+			if gpuInfo.GPUFreeMem-gpuMemRequest < 0 {
+				delete(nodeRes.GpuFree, GPUID)
+			}
+		}
+
 	}
 }

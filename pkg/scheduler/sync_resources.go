@@ -19,6 +19,7 @@ func syncClusterResources(nodeList []*corev1.Node, podList []*corev1.Pod, shareP
 }
 
 func syncPodResources(nodeRes NodeResources, podList []*corev1.Pod, sharePodList []*sharedgpuv1.SharePod) {
+	klog.Info("==============syncPodResources==============\n")
 	for _, pod := range podList {
 		nodeName := pod.Spec.NodeName
 		// 1. If Pod is not scheduled, it don't use resources.
@@ -139,6 +140,7 @@ func syncPodResources(nodeRes NodeResources, podList []*corev1.Pod, sharePodList
 						GPUFreeReq: 1000 - int64(math.Ceil(gpu_request*(float64)(1000.0))),
 						GPUFreeMem: nodeRes[nodeName].GpuMemTotal - gpu_mem,
 					}
+					klog.Info("[RIYACHU] GPU Mem: ", nodeRes[nodeName].GpuFree[GPUID])
 				} else {
 					klog.Errorf("==================================")
 					klog.Errorf("Bug! The rest number of free GPU is not enough for SharePod! GPUID: %s", GPUID)
@@ -153,6 +155,7 @@ func syncPodResources(nodeRes NodeResources, podList []*corev1.Pod, sharePodList
 			} else {
 				gpuInfo.GPUFreeReq -= int64(math.Ceil(gpu_request * (float64)(1000.0)))
 				gpuInfo.GPUFreeMem -= gpu_mem
+				klog.Info("[RIYACHU] GPU Mem: ", gpuInfo.GPUFreeMem)
 			}
 
 			if affinityTag != "" {
