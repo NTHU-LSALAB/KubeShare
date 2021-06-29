@@ -241,7 +241,8 @@ func FindInQueue(key string, pl *list.List) (*PodRequest, bool) {
  * errCode 1: need dummy Pod
  * errCode 2: resource exceed
  * errCode 3: Pod manager port pool is full
- * errCode 255: other error
+ * errCode 4: same Pod restart too quickly -> Port 0
+ * errCode 255: other error,
  */
 func (c *Controller) getPhysicalGPUuuid(nodeName string, GPUID string, gpu_request, gpu_limit float64, gpu_mem int64, key string, port *int) (uuid string, errCode int) {
 
@@ -267,6 +268,10 @@ func (c *Controller) getPhysicalGPUuuid(nodeName string, GPUID string, gpu_reque
 			klog.Errorf("Pod manager port pool is full!!!!!")
 			return "", 3
 		}
+		if tmp == 0 {
+			klog.Errorf("Pod manager error: Port 0")
+			return "", 255
+		}
 		*port = tmp
 		gpu.PodList.PushBack(&PodRequest{
 			Key:            key,
@@ -291,6 +296,10 @@ func (c *Controller) getPhysicalGPUuuid(nodeName string, GPUID string, gpu_reque
 			if tmp == -1 {
 				klog.Errorf("Pod manager port pool is full!!!!!")
 				return "", 3
+			}
+			if tmp == 0 {
+				klog.Errorf("Pod manager error: Port 0")
+				return "", 4
 			}
 			*port = tmp
 			gpu.PodList.PushBack(&PodRequest{

@@ -327,9 +327,10 @@ func (c *Controller) syncHandler(key string) error {
 
 	// sharepod.Print()
 
-	if isGPUPod && sharepod.Status.BoundDeviceID == "" {
+	if isGPUPod { //&& sharepod.Status.BoundDeviceID == ""
 		var errCode int
 		physicalGPUuuid, errCode = c.getPhysicalGPUuuid(sharepod.Spec.NodeName, GPUID, gpu_request, gpu_limit, gpu_mem, key, &physicalGPUport)
+		klog.Info("[RIYACHU] Assigned Port number is ", physicalGPUport, "\n")
 		switch errCode {
 		case 0:
 			klog.Infof("SharePod %s is bound to GPU uuid: %s", key, physicalGPUuuid)
@@ -343,6 +344,10 @@ func (c *Controller) syncHandler(key string) error {
 			return err
 		case 3:
 			err := fmt.Errorf("Pod manager port pool is full!")
+			utilruntime.HandleError(err)
+			return err
+		case 4:
+			err := fmt.Errorf("Same Pod restart too quickly")
 			utilruntime.HandleError(err)
 			return err
 		default:
@@ -374,7 +379,7 @@ func (c *Controller) syncHandler(key string) error {
 		c.recorder.Event(sharepod, corev1.EventTypeWarning, ErrResourceExists, msg)
 		return fmt.Errorf(msg)
 	}
-
+	klog.Info("[RIYACHU] Port number is ", physicalGPUport, "\n")
 	if (pod.Spec.RestartPolicy == corev1.RestartPolicyNever && (pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed)) ||
 		(pod.Spec.RestartPolicy == corev1.RestartPolicyOnFailure && pod.Status.Phase == corev1.PodSucceeded) {
 		go c.removeSharePodFromList(sharepod)
@@ -390,7 +395,7 @@ func (c *Controller) syncHandler(key string) error {
 }
 
 func (c *Controller) updateSharePodStaus(sharepod *sharedgpuv1.SharePod, phase sharedgpuv1.SharePodPhase, message string) error {
-	klog.V(4).Infof("[RIYACHU] updateSharePodStatus\n")
+	//klog.V(4).Infof("[RIYACHU] updateSharePodStatus\n")
 
 	sharepodCopy := sharepod.DeepCopy()
 	sharepodCopy.Status.Phase = phase
@@ -401,7 +406,7 @@ func (c *Controller) updateSharePodStaus(sharepod *sharedgpuv1.SharePod, phase s
 }
 
 func (c *Controller) updateSharePodWithPodStatus(sharepod *sharedgpuv1.SharePod, pod *corev1.Pod, port int, phase sharedgpuv1.SharePodPhase, message string) error {
-	klog.V(4).Infof("[RIYACHU] updateSharePodWithPodStatus\n")
+	//klog.V(4).Infof("[RIYACHU] updateSharePodWithPodStatus\n")
 
 	sharepodCopy := sharepod.DeepCopy()
 	sharepodCopy.Status.PodStatus = pod.Status.DeepCopy()
@@ -512,8 +517,7 @@ func (c *Controller) handleObject(obj interface{}) {
 // 2. Pod Phase
 func newPod(sharepod *sharedgpuv1.SharePod, isGPUPod bool, podManagerIP string, podManagerPort int) *corev1.Pod {
 
-	klog.V(4).Infof("[RIYACHU] newPod\n")
-
+	klog.V(4).Infof("[RIYACHU] newPod with port: ", podManagerPort, "\n")
 	specCopy := sharepod.Spec.DeepCopy()
 	labelCopy := make(map[string]string, len(sharepod.ObjectMeta.Labels))
 	for key, val := range sharepod.ObjectMeta.Labels {

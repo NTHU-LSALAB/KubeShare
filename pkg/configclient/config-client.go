@@ -126,21 +126,20 @@ func handleRequest(r string) {
 		klog.Errorf("Error when create config file on path: %s", SchedulerGPUConfigPath+UUID)
 	}
 
+	gpu_config_f.WriteString(fmt.Sprintf("%d\n", strings.Count(podlist, ",")))
+	gpu_config_f.WriteString(strings.ReplaceAll(podlist, ",", "\n"))
+
 	podmanager_port_f, err := os.Create(SchedulerGPUPodManagerPortPath + UUID)
 	if err != nil {
 		klog.Errorf("Error when create config file on path: %s", SchedulerGPUPodManagerPortPath+UUID)
 	}
-
-	gpu_config_f.WriteString(fmt.Sprintf("%d\n", strings.Count(podlist, ",")))
-	gpu_config_f.WriteString(strings.ReplaceAll(podlist, ",", "\n"))
-
 	podmanager_port_f.WriteString(fmt.Sprintf("%d\n", strings.Count(portmap, ",")))
 	podmanager_port_f.WriteString(strings.ReplaceAll(portmap, ",", "\n"))
 
 	gpu_config_f.Sync()
 	podmanager_port_f.Sync()
-	gpu_config_f.Close()
 	podmanager_port_f.Close()
+	gpu_config_f.Close()
 }
 
 func sendHeartbeat(conn net.Conn, tick <-chan time.Time) error {

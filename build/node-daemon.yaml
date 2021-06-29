@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: kubeshare-node-daemon
+  namespace: kube-system
+  labels:
+    kubeshare: kubeshare-node-daemon
+spec:
+  selector:
+    matchLabels:
+      kubeshare: kubeshare-node-daemon
+  template:
+    metadata:
+      labels:
+        kubeshare: kubeshare-node-daemon
+    spec:
+      nodeSelector:
+        SharedGPU: "true"
+      terminationGracePeriodSeconds: 0
+      restartPolicy: Always
+      tolerations:
+      - key: node-role.kubernetes.io/master
+        effect: NoSchedule
+      initContainers:
+      - name: gemini-hook-init
+        image: riyazhu/kubeshare-gemini-hook-init:debug #ncy9371/kubeshare-gemini-hook-init:20200429135835
+        volumeMounts:
+        - name: "kubeshare-library"
+          mountPath: /kubeshare/library  
+        - name: "exporter"
+          mountPath: /tmp
+      containers:
+      - name: config-client
+        image: riyazhu/kubeshare-config-client:debug
+        env:
+        - name: KUBESHARE_SCHEDULER_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        volumeMounts:
+        - name: "kubeshare-scheduler"
+          mountPath: "/kubeshare/scheduler"
+        - name: "kubeshare-library"
+          mountPath: "/kubeshare/library"
+        - name: "exporter"
+          mountPath: "/tmp"
+      - name: gemini-scheduler
+        image: riyazhu/kubeshare-gemini-scheduler:debug #ncy9371/kubeshare-gemini-scheduler:20200429135835
+        volumeMounts:
+        - name: "kubeshare-scheduler"
+          mountPath: "/kubeshare/scheduler"
+        - name: "kubeshare-library"
+          mountPath: "/kubeshare/library"
+        volumeMounts:
+        - name: "kubeshare-scheduler"
+          mountPath: "/kubeshare/scheduler"
+        - name: "exporter"
+          mountPath: /tmp
+      volumes:
+      - name: "kubeshare-scheduler"
+        hostPath:
+          path: "/kubeshare/scheduler"
+      - name: "kubeshare-library"
+        hostPath:
+          path: "/kubeshare/library"
+      - name: "exporter"
+        hostPath:
+          path: "/tmp"
+

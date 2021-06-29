@@ -1,0 +1,18 @@
+apiVersion: sharedgpu.goc/v1
+kind: SharePod
+metadata:
+  name: sharepod3
+  annotations:
+    "sharedgpu/gpu_request": "0.2"
+    "sharedgpu/gpu_limit": "1.0"
+    "sharedgpu/gpu_mem": "3073741824"
+spec:
+  containers:
+  - name: tensorflow4
+    image:  pytorch_1.15_gpu_gemini_2.0:latest
+    imagePullPolicy: IfNotPresent
+    resources:
+      limits:
+        cpu: "1"
+        memory: "4Gi"
+

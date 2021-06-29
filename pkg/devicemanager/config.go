@@ -126,7 +126,7 @@ func clientHandler(conn net.Conn) {
 	deviceIDArr := strings.Split(nvidiaDevicesStr[:len(nvidiaDevicesStr)-1], ",")
 	uuid2mem := make(map[string]string, len(deviceIDArr)-1)
 	uuid2port := make(map[string]string, len(deviceIDArr)-1)
-	port := 50051
+	port := 50051 // 49901
 	for _, d := range deviceIDArr {
 		if d == "" {
 			continue
@@ -248,6 +248,7 @@ func periodicallyCheckHeartbeats(tick <-chan time.Time) {
 }
 
 func syncConfig(nodeName, UUID string, podList *list.List) error {
+	klog.Infoln("[RIYACHU]...syncConfig...")
 	nodeStatusMux.Lock()
 	client, ok := nodeStatus[nodeName]
 	nodeStatusMux.Unlock()

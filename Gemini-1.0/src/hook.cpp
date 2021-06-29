@@ -37,6 +37,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+
 #include <climits>
 #include <cmath>
 #include <cstdio>
@@ -145,10 +146,12 @@ void *dlsym(void *handle, const char *symbol) {
 }
 
 /* connection with Pod manager */
+std::string scheduler_ip_file = "/kubeshare/library/schedulerIP.txt";
+std::string scheduler_port_file = "/kubeshare/schedulerPort.txt";
 char pod_manager_ip[20] = "127.0.0.1";
 uint16_t pod_manager_port = 50052;                       // default value
 pthread_mutex_t comm_mutex = PTHREAD_MUTEX_INITIALIZER;  // one communication at a time
-const int NET_OP_MAX_ATTEMPT = 5;  // maximum time retrying failed network operations
+const int NET_OP_MAX_ATTEMPT = 10;  // maximum time retrying failed network operations
 const int NET_OP_RETRY_INTV = 10;  // seconds between two retries
 
 /* GPU computation resource usage */
@@ -192,18 +195,56 @@ long long us_since(struct timespec begin) {
 /**
  * get connection information from environment variables
  */
+// void save_port_number(){
+//   // get Pod manager port, default 50052
+//   char *port = getenv("POD_MANAGER_PORT");
+//   if (port != NULL) pod_manager_port = atoi(port);
+
+//   std::ofstream ofs(scheduler_port_file);
+//   if(!ofs.is_open()){
+//     ERROR("Failed to open the port file");
+//     exit(-1);
+//   }
+//   ofs << port;
+//   ofs.close();
+// }
+/**
+ * get connection information from file
+ */
 void configure_connection() {
   // get Pod manager IP, default 127.0.0.1
-  char *ip = getenv("POD_MANAGER_IP");
+  /*char *ip = getenv("POD_MANAGER_IP");
   if (ip != NULL) strcpy(pod_manager_ip, ip);
-
+  */
+ 
+  std::ifstream ifs_ip(scheduler_ip_file, std::ios::in);
+  if(!ifs_ip.is_open()){
+    ERROR("Failed to open the ip file");
+    exit(-1);
+  }
+  std::string line;
+  getline(ifs_ip,line);
+  if(line != "") strcpy(pod_manager_ip, line.c_str());
+  ifs_ip.close();
   // get Pod manager port, default 50052
+ /* std::ifstream ifs_port(scheduler_port_file, std::ios::in);
+  if(!ifs_port.is_open()){
+    ERROR("Failed to open the port file");
+    exit(-1);
+  }
+  getline(ifs_port,line);
+  if(line!="") pod_manager_port = stoi(line);
+  ifs_port.close();*/
   char *port = getenv("POD_MANAGER_PORT");
   if (port != NULL) pod_manager_port = atoi(port);
 
   DEBUG("Pod manager: %s:%u", pod_manager_ip, pod_manager_port);
 }
 
+int attempt_connection(int __fd, __CONST_SOCKADDR_ARG __addr, socklen_t __len) {
+  configure_connection();
+  return connect(__fd, __addr, __len);
+}
 /**
  * establish connection with scheduler.
  * @return connected socket file descriptor
@@ -221,8 +262,9 @@ int establish_connection() {
   info.sin_addr.s_addr = inet_addr(pod_manager_ip);
   info.sin_port = htons(pod_manager_port);
 
+  // connect(sockfd, (struct sockaddr *)&info, sizeof(info));
   int rc = multiple_attempt(
-      [&]() -> int { return connect(sockfd, (struct sockaddr *)&info, sizeof(info)); },
+      [&]() -> int { return attempt_connection(sockfd, (struct sockaddr *)&info, sizeof(info));},
       NET_OP_MAX_ATTEMPT, NET_OP_RETRY_INTV);
   if (rc != 0) {
     ERROR("Connection error: %s", strerror(rc));
@@ -686,7 +728,7 @@ void initialize() {
   hook_inf.preHooks[CU_HOOK_ARRAY_CREATE] = (void *)cuArrayCreate_prehook;
   hook_inf.preHooks[CU_HOOK_ARRAY3D_CREATE] = (void *)cuArray3DCreate_prehook;
   hook_inf.preHooks[CU_HOOK_MIPMAPPED_ARRAY_CREATE] = (void *)cuMipmappedArrayCreate_prehook;
-
+  //save_port_number();
   configure_connection();
   pthread_mutex_lock(&request_time_mutex);
   cudaEventCreate(&cuevent_start);

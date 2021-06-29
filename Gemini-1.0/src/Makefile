@@ -17,19 +17,19 @@ CUDA_PATH ?= /usr/local/cuda-10.0
 PWD := $(shell pwd)
 PREFIX ?= $(PWD)/..
 
-SMS ?= 30 35 37 50 52 60 61 70
+SMS ?=  35 37 50 52 60 61 70
 GENCODE_FLAGS += $(foreach sm,$(SMS),-gencode arch=compute_$(sm),code=sm_$(sm))
 
-CXX ?= g++
+CXX ?= g++ 
 NVCC ?= $(CUDA_PATH)/bin/nvcc -ccbin $(CXX)
 
-CUDA_LDFLAGS += -lcuda -L$(CUDA_PATH)/lib64 -L$(CUDA_PATH)/lib64/stubs
-LDFLAGS += -ldl -lrt
+CUDA_LDFLAGS += -lcuda -L$(CUDA_PATH)/lib64 -L$(CUDA_PATH)/lib64/stubs 
+LDFLAGS += -ldl -lrt 
 
-CXXFLAGS += -std=c++11 -fPIC
+CXXFLAGS += -std=c++11 -fPIC 
 
 ifeq ($(DEBUG),1)
-CXXFLAGS += -g -D_DEBUG -Wall
+CXXFLAGS += -g -D_DEBUG -Wall 
 else
 CXXFLAGS += -O2
 endif
@@ -61,7 +61,7 @@ schd-priority.o: schd-priority.cpp scheduler.h
 	$(EXEC) g++ $(CXXFLAGS) -o $@ -c $<
 
 gem-schd: scheduler.o schd-priority.o debug.o comm.o
-	$(EXEC) g++ $(LDFLAGS) -pthread -rdynamic $+ -o $@
+	$(EXEC) g++ $(LDFLAGS) -pthread -rdynamic  $+ -o $@
 	$(EXEC) mkdir -p $(PREFIX)/bin
 	$(EXEC) cp $@ $(PREFIX)/bin
 
@@ -74,4 +74,4 @@ gem-pmgr: pod-manager.o debug.o comm.o
 	$(EXEC) cp $@ $(PREFIX)/bin
 
 clean:
-	rm -f *.o
+	rm -f *.o && rm ./gem-schd && rm ./gem-pmgr && rm ./libgemhook.so.1

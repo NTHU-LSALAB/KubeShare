@@ -31,5 +31,6 @@ COPY --from=build /tmp/build/kubeshare/docker/kubeshare-gemini-scheduler/launche
 COPY --from=build /tmp/build/kubeshare/docker/kubeshare-gemini-scheduler/launcher.py /launcher.py
 COPY --from=build /tmp/build/Gemini/bin/gem-schd /gem-schd
 COPY --from=build /tmp/build/Gemini/bin/gem-pmgr /gem-pmgr
-
+#COPY --from=build /tmp/build/kubeshare/docker/kubeshare-gemini-scheduler/launch-backend.py /launch-backend.py
 CMD ["/launcher-multigpus.sh", "/kubeshare/scheduler/config", "/kubeshare/scheduler/podmanagerport"]
+#CMD ["/launch-backend.py", "/gem-schd", "/gem-pmgr"]

@@ -182,7 +182,7 @@ pthread_mutex_t candidate_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t candidate_cond;  // initialized with CLOCK_MONOTONIC in main()
 
 void read_resource_config() {
-  std::fstream fin;
+  std::ifstream fin;
   ClientInfo *client_inf;
   char client_name[HOST_NAME_MAX], full_path[PATH_MAX];
   size_t gpu_memory_size;

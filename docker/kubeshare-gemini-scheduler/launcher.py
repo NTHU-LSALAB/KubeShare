@@ -80,6 +80,8 @@ def main():
     launch_scheduler()
     sys.stderr.write(f"[launcher] scheduler started on 0.0.0.0:{args.port}\n")
     sys.stderr.flush()
+    
+    update_podmanager(os.path.join(args.pmgr_port_dir, args.gpu_uuid)) #first time 
 
     ino = inotify.adapters.Inotify()
     ino.add_watch(args.pmgr_port_dir, inotify.constants.IN_CLOSE_WRITE)

@@ -21,7 +21,7 @@ trap "trap_ctrlc" 2
 port=49901
 
 for gpu in $(nvidia-smi --format=csv,noheader --query-gpu=uuid); do
-    echo 0 > $1/$gpu
+    #echo 0 > $1/$gpu
     python3 /launcher.py /gem-schd /gem-pmgr $gpu $1/$gpu $2 --port $port 1>&2 &
     pids="$pids $!"
     port=$(($port+1))
