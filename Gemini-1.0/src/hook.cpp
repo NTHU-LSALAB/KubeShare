@@ -74,11 +74,11 @@ static void *real_dlsym(void *handle, const char *symbol) {
 }
 
 struct hookInfo {
-  int debug_mode;
+  int debug_mode = 0;
   void *preHooks[NUM_HOOK_SYMBOLS];
   void *postHooks[NUM_HOOK_SYMBOLS];
   int call_count[NUM_HOOK_SYMBOLS];
-
+ 
   hookInfo() {
     const char *envHookDebug;
 
@@ -239,6 +239,7 @@ void configure_connection() {
   if (port != NULL) pod_manager_port = atoi(port);
 
   DEBUG("Pod manager: %s:%u", pod_manager_ip, pod_manager_port);
+  INFO("Pod manager: %s:%u", pod_manager_ip, pod_manager_port);
 }
 
 int attempt_connection(int __fd, __CONST_SOCKADDR_ARG __addr, socklen_t __len) {
@@ -399,7 +400,8 @@ double estimate_full_burst(double measured_burst, double measured_window) {
 
   DEBUG("measured burst: %.3f ms, window: %.3f ms, estimated full burst: %.3f ms", measured_burst,
         measured_window, full_burst);
-
+  INFO("measured burst: %.3f ms, window: %.3f ms, estimated full burst: %.3f ms", measured_burst,
+        measured_window, full_burst);
   return full_burst;
 }
 
@@ -428,6 +430,7 @@ double get_token_from_scheduler(double next_burst) {
   new_quota = get_msg_data<double>(attached, rpos);
 
   DEBUG("Get token from scheduler, quota: %f", new_quota);
+  INFO("Get token from scheduler, quota: %f", new_quota);
   return new_quota;
 }
 
@@ -459,7 +462,10 @@ void *wait_cuda_kernels(void *args) {
     // sleep until token expired or being notified
     pthread_mutex_lock(&overuse_trk_mutex);
     int rc = pthread_cond_timedwait(&overuse_trk_intr_cond, &overuse_trk_mutex, &ts);
-    if (rc != ETIMEDOUT) DEBUG("overuse tracking thread interrupted");
+    if (rc != ETIMEDOUT) {
+      DEBUG("overuse tracking thread interrupted");
+      INFO("overuse tracking thread interrupted");
+    }
     pthread_mutex_unlock(&overuse_trk_mutex);
 
     // synchronize all running kernels
@@ -476,7 +482,7 @@ void *wait_cuda_kernels(void *args) {
     overuse = std::max(0.0, (double)elapsed_ms - quota_time);
 
     DEBUG("overuse: %.3f ms", overuse);
-
+    INFO("overuse: %.3f ms", overuse);
     // notify tracking complete
     pthread_mutex_lock(&overuse_trk_mutex);
     overuse_trk_cmpl = true;
@@ -556,6 +562,7 @@ CUresult cuMemFree_prehook(CUdeviceptr ptr) {
   pthread_mutex_lock(&allocation_mutex);
   if (allocation_map.find(ptr) == allocation_map.end()) {
     DEBUG("Freeing unknown memory! %zx", ptr);
+    INFO("Freeing unknown memory! %zx", ptr);
   } else {
     gpu_mem_used -= allocation_map[ptr];
     update_memory_usage(allocation_map[ptr], 0);
