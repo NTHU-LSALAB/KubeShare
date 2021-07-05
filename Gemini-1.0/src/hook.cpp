@@ -151,7 +151,7 @@ std::string scheduler_port_file = "/kubeshare/schedulerPort.txt";
 char pod_manager_ip[20] = "127.0.0.1";
 uint16_t pod_manager_port = 50052;                       // default value
 pthread_mutex_t comm_mutex = PTHREAD_MUTEX_INITIALIZER;  // one communication at a time
-const int NET_OP_MAX_ATTEMPT = 10;  // maximum time retrying failed network operations
+const int NET_OP_MAX_ATTEMPT = 5;  // maximum time retrying failed network operations
 const int NET_OP_RETRY_INTV = 10;  // seconds between two retries
 
 /* GPU computation resource usage */
@@ -298,7 +298,12 @@ int communicate(char *sbuf, char *rbuf, int socket_timeout) {
   rc = multiple_attempt(
       [&]() -> int {
         if (send(sockfd, sbuf, REQ_MSG_LEN, 0) == -1) return -1;
-        if (recv(sockfd, rbuf, RSP_MSG_LEN, 0) == -1) return -1;
+        ERROR("[RIYACHU] multiple_attempt after send %s", strerror(errno));
+        if (recv(sockfd, rbuf, RSP_MSG_LEN, 0) == -1){
+          ERROR("[RIYACHU] multiple_attempt recv == -1 %s", strerror(errno));
+           return -1;
+        }
+        ERROR("[RIYACHU] multiple_attempt after recv %s", strerror(errno));
         return 0;
       },
       NET_OP_MAX_ATTEMPT);
@@ -410,6 +415,7 @@ double get_token_from_scheduler(double next_burst) {
   double new_quota;
 
   bzero(sbuf, REQ_MSG_LEN);
+  bzero(rbuf, RSP_MSG_LEN); //RSP_MSG_LEN
   prepare_request(sbuf, REQ_QUOTA, overuse, next_burst);
 
   // retrieve token from scheduler

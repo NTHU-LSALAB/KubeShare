@@ -89,6 +89,6 @@ spec:
       containers:
       - name: kubeshare-device-manager
         image: riyazhu/kubeshare-device-manager:debug
-
+        imagePullPolicy: Always
 ---
 

@@ -38,6 +38,7 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
+// #include <fcntl.h> 
 
 #include <algorithm>
 #include <chrono>
@@ -65,7 +66,7 @@ using std::string;
 using std::chrono::duration_cast;
 using std::chrono::microseconds;
 using std::chrono::steady_clock;
-std::ofstream myfile ("/tmp/Gemini/export.txt");
+//std::ofstream myfile ("/tmp/Gemini/export.txt");
 // signal handler
 void sig_handler(int);
 #ifdef _DEBUG
@@ -157,6 +158,7 @@ double ClientInfo::get_min_fraction() { return MIN_FRAC; }
 double ClientInfo::get_max_fraction() { return MAX_FRAC; }
 
 // self-adaptive quota algorithm
+/*
 double ClientInfo::get_quota() {
   const double UPDATE_RATE = 0.5;  // how drastically will the quota changes
   if(!myfile)myfile.open ("/tmp/Gemini/export.txt", std::ofstream::out | std::ofstream::app);
@@ -170,6 +172,24 @@ double ClientInfo::get_quota() {
     quota_ = std::min(quota_, MAX_QUOTA);  // upperbound
     DEBUG("%s: burst: %.3fms, assign quota: %.3fms", name.c_str(), burst_, quota_);
     myfile<<name.c_str()<<" "<<quota_<<std::endl;
+  }
+  return quota_;
+}
+*/
+double ClientInfo::get_quota() {
+  const double UPDATE_RATE = 0.5;  // how drastically will the quota changes
+
+  if (burst_ < 1e-9) {
+    // special case when no burst data available, just fallback to static quota
+    quota_ = BASE_QUOTA;
+    DEBUG("%s: fallback to static quota, assign quota: %.3fms", name.c_str(), quota_);
+    INFO("%s: fallback to static quota, assign quota: %.3fms", name.c_str(), quota_);
+  } else {
+    quota_ = burst_ * UPDATE_RATE + quota_ * (1 - UPDATE_RATE);
+    quota_ = std::max(quota_, MIN_QUOTA);  // lowerbound
+    quota_ = std::min(quota_, MAX_QUOTA);  // upperbound
+    DEBUG("%s: burst: %.3fms, assign quota: %.3fms", name.c_str(), burst_, quota_);
+    INFO("%s: burst: %.3fms, assign quota: %.3fms", name.c_str(), burst_, quota_);
   }
   return quota_;
 }
@@ -237,6 +257,7 @@ void monitor_file(const char *path, const char *filename) {
   while (1) {
     int i = 0;
     char buffer[BUF_LEN];
+    bzero(buffer, BUF_LEN);
     int length = read(fd, buffer, BUF_LEN);
     if (length < 0) ERROR("Read error");
 
@@ -384,6 +405,7 @@ candidate_t select_candidate() {
       // all candidates reach usage limit
       auto ts = get_timespec_after(history_list.begin()->end - window_start);
       DEBUG("sleep until %ld.%03ld", ts.tv_sec, ts.tv_nsec / 1000000);
+      INFO("sleep until %ld.%03ld", ts.tv_sec, ts.tv_nsec / 1000000);
       // also wakes up if new requests come in
       pthread_cond_timedwait(&candidate_cond, &candidate_mutex, &ts);
       continue;  // go to begin of loop
@@ -414,7 +436,7 @@ void handle_message(int client_sock, char *message) {
   }
   client_inf = client_info_map[string(client_name)];
   bzero(sbuf, RSP_MSG_LEN);
-
+  int rc ,  MAX_RETRY = 5;
   if (req == REQ_QUOTA) {
     double overuse, burst, window;
     overuse = get_msg_data<double>(attached, offset);
@@ -429,14 +451,40 @@ void handle_message(int client_sock, char *message) {
     // select_candidate() will give quota later
 
   } else if (req == REQ_MEM_LIMIT) {
+    // int flags = fcntl(client_sock, F_GETFL, 0);
+    // if(fcntl(client_sock, F_SETFL, flags & ~O_NONBLOCK) < 0) {
+    //     ERROR("fcntl() error");
+    // }
+
     prepare_response(sbuf, REQ_MEM_LIMIT, req_id, (size_t)0, client_inf->gpu_mem_limit);
-    send(client_sock, sbuf, RSP_MSG_LEN, 0);
+    
+     rc = multiple_attempt(
+        [&]() -> int {
+          INFO("[RIYACHU-gemsched] %s handle_message(REQ_MEM_LIMIT): send %d",client_name, req_id);
+          if(send(client_sock, sbuf, RSP_MSG_LEN, 0) == -1) return -1;
+          INFO("[RIYACHU-gemsched] %s handle_message: REQ_MEM_LIMIT %d ",client_name, req_id);
+        },
+        MAX_RETRY, 3);
+    
   } else if (req == REQ_MEM_UPDATE) {
     // ***for communication interface compatibility only***
     // memory usage is only tracked on hook library side
-    WARNING("scheduler always returns true for memory usage update!");
+    DEBUG("scheduler always returns true for memory usage update!");
+    INFO("scheduler always returns true for memory usage update!");
+    // int flags = fcntl(client_sock, F_GETFL, 0);
+    // if(fcntl(client_sock, F_SETFL, flags & ~O_NONBLOCK) < 0) {
+    //     ERROR("fcntl() error");
+    // }
     prepare_response(sbuf, REQ_MEM_UPDATE, req_id, 1);
-    send(client_sock, sbuf, RSP_MSG_LEN, 0);
+    
+    rc = multiple_attempt(
+        [&]() -> int {
+          INFO("[RIYACHU-gemsched] %s handle_message(REQ_MEM_UPDATE): send %d",client_name, req_id);
+          if(send(client_sock, sbuf, RSP_MSG_LEN, 0) == -1) return -1;
+          INFO("[RIYACHU-gemsched] %s handle_message: REQ_MEM_UPDATE %d ",client_name, req_id);
+        },
+        MAX_RETRY, 3);
+    
   } else {
     WARNING("\"%s\" send an unknown request.", client_name);
   }
@@ -470,7 +518,19 @@ void *schedule_daemon_func(void *) {
       char sbuf[RSP_MSG_LEN];
       bzero(sbuf, RSP_MSG_LEN);
       prepare_response(sbuf, REQ_QUOTA, selected.req_id, quota);
-      send(selected.socket, sbuf, RSP_MSG_LEN, 0);
+      // int flags = fcntl(selected.socket, F_GETFL, 0);
+      // if(fcntl(selected.socket, F_SETFL, flags | O_NONBLOCK) < 0) {
+      //     ERROR("fcntl() error");
+      // }
+      int rc, MAX_RETRY=5;
+      rc = multiple_attempt(
+        [&]() -> int {
+          WARNING("[RIYACHU-gemsched] handle_message(REQ_MEM_LIMIT): send %s", selected.name.c_str());
+          if(send(selected.socket, sbuf, RSP_MSG_LEN, 0) == -1) return -1;
+          WARNING("[RIYACHU-gemsched] handle_message: REQ_MEM_LIMIT %s ", selected.name.c_str());
+        },
+        MAX_RETRY, 3);
+    
 
       struct timespec ts = get_timespec_after(quota);
 
@@ -507,10 +567,17 @@ void *pod_client_func(void *args) {
   int pod_sockfd = *((int *)args);
   char *rbuf = new char[REQ_MSG_LEN];
   ssize_t recv_rc;
+  bzero(rbuf, REQ_MSG_LEN);
+  // int flags = fcntl(pod_sockfd, F_GETFL, 0);
+  //   if(fcntl(pod_sockfd, F_SETFL, flags & ~O_NONBLOCK) < 0) {
+  //       ERROR("fcntl() error");
+  //   }
   while ((recv_rc = recv(pod_sockfd, rbuf, REQ_MSG_LEN, 0)) > 0) {
+    INFO("[RIYACHU] (scheduler)pod_client_func recv -> handle message");
     handle_message(pod_sockfd, rbuf);
   }
   DEBUG("Connection closed by Pod manager. recv() returns %ld.", recv_rc);
+  INFO("Connection closed by Pod manager. recv() returns %ld.", recv_rc);
   close(pod_sockfd);
   delete (int *)args;
   delete[] rbuf;

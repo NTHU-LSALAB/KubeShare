@@ -58,6 +58,7 @@ spec:
       containers:
         - name: kubeshare-scheduler
           image: riyazhu/kubeshare-scheduler:develop
+          imagePullPolicy: Always
       priorityClassName: system-node-critical
       tolerations:
       - key: "CriticalAddonsOnly"
