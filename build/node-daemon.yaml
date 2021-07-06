@@ -48,7 +48,7 @@ spec:
           mountPath: "/tmp"
       - name: gemini-scheduler
         image: riyazhu/kubeshare-gemini-scheduler:20210706124950 #ncy9371/kubeshare-gemini-scheduler:20200429135835
-        #imagePullPolicy: Always
+        # imagePullPolicy: Always
         volumeMounts:
         - name: "kubeshare-scheduler"
           mountPath: "/kubeshare/scheduler"
