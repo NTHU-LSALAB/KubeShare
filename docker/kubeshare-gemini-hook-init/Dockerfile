@@ -9,7 +9,7 @@ WORKDIR /tmp/build
 COPY ./Gemini-1.0 Gemini
 
 RUN cd Gemini && \
-    make -C src CUDA_PATH=/usr/local/cuda/ DEBUG=1
+    make -C src CUDA_PATH=/usr/local/cuda/ 
 
 # RUN apt update && \
 #     apt install -y git && \

@@ -307,7 +307,7 @@ int hook_update_memory_usage(size_t mem_size, int allocate, int sockfd) {
     allocation_map[sockfd] -= mem_size;
   }
   DEBUG("GPU memory usage = %ld bytes.", gpu_mem_used);
-  INFO("GPU memory usage = %ld bytes.", gpu_mem_used);
+  
   pthread_mutex_unlock(&mem_info_mutex);
   return ok;
 }
@@ -316,7 +316,7 @@ int hook_update_memory_usage(size_t mem_size, int allocate, int sockfd) {
 double hook_kernel_launch(int sockfd, double overuse_ms, double burst, char* client_name) {
   pthread_mutex_lock(&kernel_launch_count_mutex);
   kernel_launch_count+=1;
-  INFO("[RIYACHU] %s kernel launch, # %d", client_name, kernel_launch_count);
+  DEBUG("%s kernel launch, # %d", client_name, kernel_launch_count);
   pthread_mutex_unlock(&kernel_launch_count_mutex);
   // wait if someone else is working with quota
   /*
@@ -338,14 +338,13 @@ double hook_kernel_launch(int sockfd, double overuse_ms, double burst, char* cli
 
     pthread_mutex_lock(&sleeping_count_mutex);
     sleeping_count+=1;
-    INFO("[RIYACHU] %s sleeping thread %d",client_name, sleeping_count);
+    DEBUG("%s sleeping thread %d",client_name, sleeping_count);
     pthread_mutex_unlock(&sleeping_count_mutex);
 
     DEBUG("%s wait for quota operation complete. quota_state: %d", client_name, quota_state);
-    INFO("%s wait for quota operation complete. quota_state: %d", client_name, quota_state);
-    int id = pthread_cond_wait(&quota_state_cond, &quota_state_mutex);
-    INFO("[RIYACHU] %s pthread_cond_wait(quota_state) %d", client_name, id);
     
+    int id = pthread_cond_wait(&quota_state_cond, &quota_state_mutex);
+    DEBUG("%s pthread_cond_wait stop , quota_state_cond success %d", client_name, id);
     
   }
 
@@ -372,7 +371,7 @@ double hook_kernel_launch(int sockfd, double overuse_ms, double burst, char* cli
     // update quota state: updating quota
     pthread_mutex_lock(&quota_state_mutex);
     quota_state = 1;
-    INFO("[RIYACHU] %s hook_kernel_launch: quota_state = 1, req_id %d", client_name, req_id);
+    DEBUG("%s hook_kernel_launch: quota_state = 1, req_id %d", client_name, req_id);
     pthread_mutex_unlock(&quota_state_mutex);
 
     // calculate estimation values
@@ -388,37 +387,36 @@ double hook_kernel_launch(int sockfd, double overuse_ms, double burst, char* cli
     request_queue.push({req_id, sbuf});
     // wake scheduler thread up  
     int ok = pthread_cond_signal(&req_queue_cond);
-    INFO("[RIYACHU] %s send signal & req_queue_cond %d, req_id %d", client_name, ok, req_id);
+    DEBUG("%s send signal & req_queue_cond %d, req_id %d", client_name, ok, req_id);
     int check = pthread_mutex_unlock(&req_queue_mutex);
     
-    INFO("[RIYACHU] %s unlock req_queue_mutex %d, req_id %d", client_name, check, req_id);
+    DEBUG("%s unlock req_queue_mutex %d, req_id %d", client_name, check, req_id);
 
-    INFO("[RIYACHU] %s before while complete %d, req_id %d", client_name, complete, req_id);
     // wait for response
     while (true) {
       pthread_mutex_lock(&rsp_map_mutex);
 
-      INFO("[RIYACHU] %s in while wait complete %d, req_id %d", client_name, complete, req_id);
+      DEBUG("%s check completed status %d, req_id %d", client_name, complete, req_id);
 
       pthread_mutex_lock(&scheduler_recv_sync_mutex);
       scheduler_recv_sync = 1;
       pthread_cond_signal(&scheduler_recv_sync_cond);
-      INFO("[RIYACHU] %s scheduler_recv_sync %d, req_id %d", client_name, scheduler_recv_sync, req_id);
+      DEBUG("%s scheduler_recv_sync %d, req_id %d", client_name, scheduler_recv_sync, req_id);
       pthread_mutex_unlock(&scheduler_recv_sync_mutex);
 
       pthread_cond_wait(&rsp_map_cond, &rsp_map_mutex);
 
       pthread_mutex_lock(&scheduler_recv_sync_mutex);
       scheduler_recv_sync = 0;
-      INFO("[RIYACHU] %s scheduler_recv_sync after wait%d, req_id %d", client_name, scheduler_recv_sync, req_id);
+      DEBUG("%s scheduler_recv_sync %d, req_id %d", client_name, scheduler_recv_sync, req_id);
       pthread_mutex_unlock(&scheduler_recv_sync_mutex);
 
-
-      INFO("[RIYACHU] %s after wait complete %d, req_id %d", client_name, complete, req_id);
+      DEBUG("%s wait stop and completed status %d, req_id %d", client_name, complete, req_id);
+      
       if (response_map.find(req_id) != response_map.end()) {
         // request completed
         complete = true;  // exit while loop
-        INFO("[RIYACHU] %s complete %d, req_id %d", client_name, complete, req_id);
+        DEBUG("%s process data and completed status %d, req_id %d", client_name, complete, req_id);
         // update quota information
         pod_quota = get_msg_data<double>((char *)response_map[req_id].data, rpos);
         quota_updated_tp = steady_clock::now();
@@ -428,12 +426,12 @@ double hook_kernel_launch(int sockfd, double overuse_ms, double burst, char* cli
         delete (double *)response_map[req_id].data;
         response_map.erase(req_id);
       }
-      INFO("[RIYACHU] %s after if complete %d, req_id %d", client_name, complete,req_id);
+      DEBUG("%s processing response data done. completed status %d, req_id %d", client_name, complete,req_id);
       pthread_mutex_unlock(&rsp_map_mutex);
       if(complete) break;
   
     }
-    INFO("[RIYACHU] %s after while true, %d", client_name, req_id);
+    DEBUG("%s Success to process data, %d", client_name, req_id);
     delete[] sbuf;
 
     // update quota state and notify threads waiting on quota state
@@ -441,26 +439,26 @@ double hook_kernel_launch(int sockfd, double overuse_ms, double burst, char* cli
 
     pthread_mutex_lock(&sleeping_count_mutex);
     sleeping_count+=1;
-    INFO("[RIYACHU] %s sleeping thread (special) %d, req_id %d", client_name, sleeping_count, req_id);
+    DEBUG("%s sleeping thread (special) %d, req_id %d", client_name, sleeping_count, req_id);
     pthread_mutex_unlock(&sleeping_count_mutex);
 
     quota_state = 0;  // usual state
-    INFO("[RIYACHU] ............%s quota_state assign 0, req_id %d .........", client_name, req_id);
+    DEBUG("%s quota_state assign 0, req_id %d", client_name, req_id);
     
     pthread_mutex_lock(&sleeping_count_mutex);
     while(sleeping_count < kernel_launch_count){
-      INFO("[RIYACHU] %s wait sleeping count >= kernel_launch_count, req_id %d", client_name, req_id);
+      DEBUG("%s wait sleeping count >= kernel_launch_count, req_id %d", client_name, req_id);
       pthread_cond_wait(&sleeping_count_cond, &sleeping_count_mutex);
     }
 
     int id = pthread_cond_broadcast(&quota_state_cond);
-    INFO("[RIYACHU] %s pthread_cond_broadcast %d, req_id %d", client_name, id, req_id);
+    DEBUG("%s pthread_cond_broadcast %d, req_id %d", client_name, id, req_id);
     
     pthread_mutex_unlock(&sleeping_count_mutex);
 
     pthread_mutex_lock(&sleeping_count_mutex);
     sleeping_count = 0;
-    INFO("[RIYACHU] %s sleeping thread clear %d", client_name, sleeping_count);
+    DEBUG("%s sleeping thread clear %d", client_name, sleeping_count);
     pthread_mutex_unlock(&sleeping_count_mutex);
     
     pthread_mutex_unlock(&quota_state_mutex);
@@ -468,7 +466,7 @@ double hook_kernel_launch(int sockfd, double overuse_ms, double burst, char* cli
   
   pthread_mutex_lock(&kernel_launch_count_mutex);
   kernel_launch_count -= 1;
-  INFO("[RIYACHU] %s delete hook thread, remaing %d", client_name, kernel_launch_count);
+  DEBUG("%s delete hook thread, remaing %d", client_name, kernel_launch_count);
   pthread_mutex_unlock(&kernel_launch_count_mutex);
 
   return pod_quota - elapsed_time;
@@ -481,10 +479,7 @@ void *hook_thread_func(void *args) {
   int sockfd = *((int *)args);
   char rbuf[REQ_MSG_LEN], sbuf[RSP_MSG_LEN];
   char  *client_name;
-  // int flags = fcntl(sockfd, F_GETFL, 0);
-  // if(fcntl(sockfd, F_SETFL, flags & ~O_NONBLOCK) < 0) {
-  //     ERROR("fcntl() error");
-  // }
+
   
   //bzero(rbuf, REQ_MSG_LEN);
   ssize_t rc;
@@ -492,7 +487,7 @@ void *hook_thread_func(void *args) {
   while (recv_zero_times <= 5) {
     if((rc = recv(sockfd, rbuf, REQ_MSG_LEN, 0)) <= 0){
       recv_zero_times++;
-      INFO("[RIYACHU] %s (pod manager)hook_thread_func recv - len 0, cnt %ld", client_name, recv_zero_times);
+      DEBUG("%s hook_thread_func recv - len <= 0, cnt %ld", client_name, recv_zero_times);
       continue;
     } 
     comm_request_t req;
@@ -506,14 +501,14 @@ void *hook_thread_func(void *args) {
     if (req == REQ_MEM_LIMIT) {
       // send gpu_mem_used and gpu_mem_limit to hook library
       len = prepare_response(sbuf, REQ_MEM_LIMIT, rid, gpu_mem_used, gpu_mem_limit);
-      INFO("[RIYACHU] %s (pod manager)hook_thread_func recv - REQ_MEM_LIMIT, %ld", client_name, rid);
+      DEBUG("%s hook_thread_func recv - REQ_MEM_LIMIT, %ld", client_name, rid);
     } else if (req == REQ_MEM_UPDATE) {
       // update memory usage
       size_t mem_size = get_msg_data<size_t>(attached, pos);
       int allocate = get_msg_data<int>(attached, pos);
       int ok = hook_update_memory_usage(mem_size, allocate, sockfd);
       len = prepare_response(sbuf, REQ_MEM_UPDATE, rid, ok);
-      INFO("[RIYACHU] %s (pod manager)hook_thread_func recv - REQ_MEM_UPDATE, %ld", client_name, rid);
+     DEBUG("%s hook_thread_func recv - REQ_MEM_UPDATE, %ld", client_name, rid);
     } else if (req == REQ_QUOTA) {
       // check if there is available quota
       double overuse_ms = get_msg_data<double>(attached, pos);
@@ -521,7 +516,7 @@ void *hook_thread_func(void *args) {
       
       double quota_remain = hook_kernel_launch(sockfd, overuse_ms, burst, client_name);
       
-      INFO("[RIYACHU] %s (pod manager)hook_thread_func recv - REQ_QUOTA, %ld", client_name, rid);
+      DEBUG("%s hook_thread_func recv - REQ_QUOTA, %ld", client_name, rid);
       // return remaining quota time
       len = prepare_response(sbuf, REQ_QUOTA, rid, quota_remain);
     }
@@ -531,7 +526,7 @@ void *hook_thread_func(void *args) {
       if (send(sockfd, sbuf, RSP_MSG_LEN, 0) == -1) {
         ERROR("failed to send message to hook library!");
       }
-      INFO("[RIYACHU] %s (pod manager)hook_thread_func send, %ld", client_name ,rid);
+      DEBUG("%s hook_thread_func send, %ld", client_name ,rid);
     }
   }
   
@@ -542,7 +537,7 @@ void *hook_thread_func(void *args) {
   gpu_mem_used -= allocation_map[sockfd];
   allocation_map.erase(sockfd);
   DEBUG("GPU memory usage = %ld bytes.", gpu_mem_used);
-  INFO("GPU memory usage = %ld bytes.", gpu_mem_used);
+  
   pthread_mutex_unlock(&mem_info_mutex);
 
   pthread_mutex_lock(&client_stat_mutex);
@@ -556,7 +551,7 @@ void *hook_thread_func(void *args) {
 
 // forward requests to scheduler
 void *scheduler_thread_send_func(void *args) {
-  INFO("scheduler_thread_send_func");
+  DEBUG("scheduler_thread_send_func");
   int sockfd = *((int *)args);
   ssize_t send_rc;
   /* waiting for request from hook threads */
@@ -572,9 +567,8 @@ void *scheduler_thread_send_func(void *args) {
       if ((send_rc = send(sockfd, req.data, REQ_MSG_LEN, 0)) <= 0) {
         ERROR("failed to send request to scheduler! return code %ld.", send_rc);
       } else {
-        INFO("[RIYACHU] (pod manager)scheduler_thread_send_func recv > 0, %ld", send_rc);
+        DEBUG("scheduler_thread_send_func recv > 0, %ld", send_rc);
         DEBUG("send a kernel launch request, req_id: %d", req.req_id);
-        INFO("send a kernel launch request, req_id: %d", req.req_id);
       }
     }
     pthread_mutex_unlock(&req_queue_mutex);
@@ -588,11 +582,8 @@ void *scheduler_thread_recv_func(void *args) {
 
   char buf[RSP_MSG_LEN], *attached;
   ssize_t rc;
-  INFO("scheduler_thread_recv_func");
-  // int flags = fcntl(sockfd, F_GETFL, 0);
-  // if(fcntl(sockfd, F_SETFL, flags & ~O_NONBLOCK) < 0) {
-  //     ERROR("fcntl() error");
-  // }
+  DEBUG("scheduler_thread_recv_func");
+
   //bzero(buf, RSP_MSG_LEN);
   while (true){  
     while ((rc = recv(sockfd, buf, RSP_MSG_LEN, 0)) > 0) {
@@ -605,14 +596,12 @@ void *scheduler_thread_recv_func(void *args) {
       attached = parse_response(buf, &req_id);
       rsp.data = new char[RSP_MSG_LEN - sizeof(reqid_t)];
       memcpy(rsp.data, attached, RSP_MSG_LEN - sizeof(reqid_t));
-      INFO("[RIYACHU] (pod manager)scheduler_thread_recv_func recv > 0, req_id %ld", req_id);
+      DEBUG("scheduler_thread_recv_func recv > 0, req_id %ld", req_id);
       DEBUG("req_id %d complete.", req_id);
-      INFO("req_id %d complete.", req_id);
       
-
       pthread_mutex_lock(&scheduler_recv_sync_mutex);
       while(scheduler_recv_sync == 0){
-        INFO("[RIYACHU] (pod manager)scheduler_thread_recv_func scheduler_recv_sync == 0, req_id %ld",  req_id);
+        DEBUG("scheduler_thread_recv_func scheduler_recv_sync == 0, req_id %ld",  req_id);
         pthread_cond_wait(&scheduler_recv_sync_cond, &scheduler_recv_sync_mutex);
       }
       pthread_mutex_unlock(&scheduler_recv_sync_mutex);
@@ -621,7 +610,7 @@ void *scheduler_thread_recv_func(void *args) {
       pthread_mutex_lock(&rsp_map_mutex);
       response_map.insert(std::make_pair(req_id, rsp));
       int ok = pthread_cond_signal(&rsp_map_cond);
-      INFO("[RIYACHU] (pod manager)scheduler_thread_recv_func signal %d, req_id %ld", ok, req_id);
+      DEBUG("scheduler_thread_recv_func signal %d, req_id %ld", ok, req_id);
       pthread_mutex_unlock(&rsp_map_mutex);
     }
   }

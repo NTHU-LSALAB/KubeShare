@@ -298,13 +298,14 @@ int communicate(char *sbuf, char *rbuf, int socket_timeout) {
   // perform communication
   rc = multiple_attempt(
       [&]() -> int {
-        if (send(sockfd, sbuf, REQ_MSG_LEN, 0) == -1) return -1;
-        ERROR("[RIYACHU] multiple_attempt after send %s", strerror(errno));
-        if (recv(sockfd, rbuf, RSP_MSG_LEN, 0) == -1){
-          ERROR("[RIYACHU] multiple_attempt recv == -1 %s", strerror(errno));
-           return -1;
+        if (send(sockfd, sbuf, REQ_MSG_LEN, 0) == -1){
+          DEBUG("multiple_attempt send error %s", strerror(errno));
+          return -1;
         }
-        ERROR("[RIYACHU] multiple_attempt after recv %s", strerror(errno));
+        if (recv(sockfd, rbuf, RSP_MSG_LEN, 0) == -1){
+          DEBUG("multiple_attempt recv error %s", strerror(errno));
+          return -1;
+        }
         return 0;
       },
       NET_OP_MAX_ATTEMPT);
@@ -400,8 +401,6 @@ double estimate_full_burst(double measured_burst, double measured_window) {
 
   DEBUG("measured burst: %.3f ms, window: %.3f ms, estimated full burst: %.3f ms", measured_burst,
         measured_window, full_burst);
-  INFO("measured burst: %.3f ms, window: %.3f ms, estimated full burst: %.3f ms", measured_burst,
-        measured_window, full_burst);
   return full_burst;
 }
 
@@ -430,7 +429,6 @@ double get_token_from_scheduler(double next_burst) {
   new_quota = get_msg_data<double>(attached, rpos);
 
   DEBUG("Get token from scheduler, quota: %f", new_quota);
-  INFO("Get token from scheduler, quota: %f", new_quota);
   return new_quota;
 }
 
@@ -464,7 +462,6 @@ void *wait_cuda_kernels(void *args) {
     int rc = pthread_cond_timedwait(&overuse_trk_intr_cond, &overuse_trk_mutex, &ts);
     if (rc != ETIMEDOUT) {
       DEBUG("overuse tracking thread interrupted");
-      INFO("overuse tracking thread interrupted");
     }
     pthread_mutex_unlock(&overuse_trk_mutex);
 
@@ -482,7 +479,6 @@ void *wait_cuda_kernels(void *args) {
     overuse = std::max(0.0, (double)elapsed_ms - quota_time);
 
     DEBUG("overuse: %.3f ms", overuse);
-    INFO("overuse: %.3f ms", overuse);
     // notify tracking complete
     pthread_mutex_lock(&overuse_trk_mutex);
     overuse_trk_cmpl = true;
@@ -562,7 +558,6 @@ CUresult cuMemFree_prehook(CUdeviceptr ptr) {
   pthread_mutex_lock(&allocation_mutex);
   if (allocation_map.find(ptr) == allocation_map.end()) {
     DEBUG("Freeing unknown memory! %zx", ptr);
-    INFO("Freeing unknown memory! %zx", ptr);
   } else {
     gpu_mem_used -= allocation_map[ptr];
     update_memory_usage(allocation_map[ptr], 0);

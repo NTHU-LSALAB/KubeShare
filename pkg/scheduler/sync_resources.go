@@ -140,7 +140,7 @@ func syncPodResources(nodeRes NodeResources, podList []*corev1.Pod, sharePodList
 						GPUFreeReq: 1000 - int64(math.Ceil(gpu_request*(float64)(1000.0))),
 						GPUFreeMem: nodeRes[nodeName].GpuMemTotal - gpu_mem,
 					}
-					klog.Info("[RIYACHU] GPU Mem: ", nodeRes[nodeName].GpuFree[GPUID])
+					klog.Info("GPU Mem: ", nodeRes[nodeName].GpuFree[GPUID])
 				} else {
 					klog.Errorf("==================================")
 					klog.Errorf("Bug! The rest number of free GPU is not enough for SharePod! GPUID: %s", GPUID)
@@ -155,7 +155,7 @@ func syncPodResources(nodeRes NodeResources, podList []*corev1.Pod, sharePodList
 			} else {
 				gpuInfo.GPUFreeReq -= int64(math.Ceil(gpu_request * (float64)(1000.0)))
 				gpuInfo.GPUFreeMem -= gpu_mem
-				klog.Info("[RIYACHU] GPU Mem: ", gpuInfo.GPUFreeMem)
+				klog.Info("GPU Mem: ", gpuInfo.GPUFreeMem)
 			}
 
 			if affinityTag != "" {

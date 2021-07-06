@@ -288,7 +288,7 @@ func (c *Controller) syncHandler(key string) error {
 		c.pendingListMux.Unlock()
 		return nil
 	} else {
-		klog.Infoln("[RIYACHU]sharePod: ", sharepod.Namespace, "/", sharepod.Name)
+		klog.Infoln("sharePod: ", sharepod.Namespace, "/", sharepod.Name)
 		shp, err := c.updateSharePodGpuMem(sharepod, strconv.FormatInt(gpu_mem, 10))
 		sharepod = shp
 		if err != nil {
@@ -310,7 +310,7 @@ func (c *Controller) syncHandler(key string) error {
 }
 
 func (c *Controller) updateSharePodStatus(sharepod *sharedgpuv1.SharePod, phase sharedgpuv1.SharePodPhase, message string) (*sharedgpuv1.SharePod, error) {
-	klog.V(4).Infof("[RIYACHU] updateSharePodStatus\n")
+	klog.V(4).Infof("updateSharePodStatus\n")
 
 	sharepodCopy := sharepod.DeepCopy()
 	sharepodCopy.Status.Phase = phase
@@ -369,7 +369,7 @@ func (c *Controller) resourceChanged(obj interface{}) {
 }
 
 func (c *Controller) updateSharePodGpuMem(sharepod *sharedgpuv1.SharePod, gpuMem string) (*sharedgpuv1.SharePod, error) {
-	klog.V(4).Infof("[RIYACHU] updateSharePodGpuMem\n")
+	klog.V(4).Infof("updateSharePodGpuMem\n")
 
 	sharepodCopy := sharepod.DeepCopy()
 	sharepodCopy.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPUMemory] = gpuMem

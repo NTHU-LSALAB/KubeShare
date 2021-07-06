@@ -1,7 +1,7 @@
 apiVersion: sharedgpu.goc/v1
 kind: SharePod
 metadata:
-  name: sharepod6
+  name: sharepod5
   annotations:
     "sharedgpu/gpu_request": "0.2"
     "sharedgpu/gpu_limit": "1.0"

@@ -64,9 +64,9 @@ func ScheduleAlgorithmBestFit(isGPUPod bool, gpu_request float64, gpu_mem int64,
 		if !gpu_mem_set {
 			totalGpuMem := nodeRes.GpuMemTotal
 			gpu_mem = int64(math.Ceil(gpu_request * (float64)(totalGpuMem)))
-			klog.V(4).Infoln("[RIYACHU] Judge-gpu request: ", gpu_request)
-			klog.V(4).Infoln("[RIYACHU] Judge-gpu mem: ", gpu_mem)
-			klog.V(4).Infoln("[RIYACHU] Judge-total gpu mem: ", (float64)(totalGpuMem))
+			klog.V(4).Infoln("Judge-gpu request: ", gpu_request)
+			klog.V(4).Infoln("Judge-gpu mem: ", gpu_mem)
+			klog.V(4).Infoln("Judge-total gpu mem: ", (float64)(totalGpuMem))
 		}
 
 		if nodeRes.CpuFree < cpuReqTotal || nodeRes.MemFree < memReqTotal {
@@ -88,8 +88,8 @@ func ScheduleAlgorithmBestFit(isGPUPod bool, gpu_request float64, gpu_mem int64,
 				}
 			}
 			if !gpu_mem_set {
-				klog.V(4).Infoln("[RIYACHU] Change Default gpu mem according to gpu_request")
-				klog.V(4).Infoln("[RIYACHU] gpu mem: ", gpu_mem)
+				klog.V(4).Infoln("Change Default gpu mem according to gpu_request")
+				klog.V(4).Infoln("gpu mem: ", gpu_mem)
 			}
 		} else {
 			tryBestNode(nodeRes.CpuFree-cpuReqTotal, nodeName, "", gpu_mem)

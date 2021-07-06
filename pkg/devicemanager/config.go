@@ -248,7 +248,6 @@ func periodicallyCheckHeartbeats(tick <-chan time.Time) {
 }
 
 func syncConfig(nodeName, UUID string, podList *list.List) error {
-	klog.Infoln("[RIYACHU]...syncConfig...")
 	nodeStatusMux.Lock()
 	client, ok := nodeStatus[nodeName]
 	nodeStatusMux.Unlock()

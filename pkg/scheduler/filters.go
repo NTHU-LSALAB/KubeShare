@@ -53,7 +53,7 @@ func GPUExclusionFilter(nodeResources NodeResources, nodeList []*corev1.Node, sh
 			}
 			// vGPU without the labe -> delete gpu candidate
 			if len(gpuInfo.GPUExclusionTags) == 0 && ok {
-				klog.Info("[RIYACHU] GPUExclusion: ", gpuInfo.GPUExclusionTags)
+				klog.Info("GPUExclusion: ", gpuInfo.GPUExclusionTags)
 				delete(nodeRes.GpuFree, GPUID)
 			}
 		}
@@ -88,7 +88,7 @@ func NodeSelectorFilter(nodeResources NodeResources, nodeList []*corev1.Node, sh
 		for key, val := range sharePodLabels {
 			if label[key] != val {
 				delete(nodeResources, nodeList[i].Name)
-				klog.Infoln("[RIYACHU] Delete Node: ", nodeList[i].Name)
+				klog.Infoln("Delete Node: ", nodeList[i].Name)
 				break
 			}
 		}
@@ -107,12 +107,12 @@ func GPUModelFilter(nodeResources NodeResources, nodeList []*corev1.Node, sharep
 		if nodeGpuModel, ok := nodeList[i].ObjectMeta.Annotations[sharedgpuv1.KubeShareNodeGPUModel]; ok {
 			if nodeGpuModel != gpuModelTag {
 				delete(nodeResources, nodeList[i].Name)
-				klog.Infof("[RIYACHU] Delete Node %v with gpu card: %v\n", nodeList[i].Name, nodeGpuModel)
+				klog.Infof("Delete Node %v with gpu card: %v\n", nodeList[i].Name, nodeGpuModel)
 			}
 
 		} else {
 			delete(nodeResources, nodeList[i].Name)
-			klog.Infof("[RIYACHU] Delete Node %v: can't find gpu model\n", nodeList[i].Name)
+			klog.Infof("Delete Node %v: can't find gpu model\n", nodeList[i].Name)
 		}
 	}
 }
