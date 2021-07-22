@@ -6,7 +6,7 @@ WORKDIR /tmp/build
 
 
 
-COPY ./Gemini-1.0 Gemini
+COPY ./Gemini Gemini
 
 RUN cd Gemini && \
     make -C src CUDA_PATH=/usr/local/cuda/ 

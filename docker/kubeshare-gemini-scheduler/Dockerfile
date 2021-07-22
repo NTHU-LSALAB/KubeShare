@@ -11,7 +11,7 @@ COPY . kubeshare
 #     git clone https://github.com/NTHU-LSALAB/Gemini.git && cd Gemini && \
 #     make -C src
 
-COPY ./Gemini-1.0 Gemini
+COPY ./Gemini Gemini
 
 RUN cd Gemini && \
     make -C src CUDA_PATH=/usr/local/cuda/ DEBUG=1
