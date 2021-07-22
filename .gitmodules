@@ -1,0 +1,4 @@
+[submodule "Gemini"]
+	path = Gemini
+	url = https://gitlab.com/geminiopencloud/product-management2/2.-requirements/gpu-sharing/gemini.git
+	branch = develop
