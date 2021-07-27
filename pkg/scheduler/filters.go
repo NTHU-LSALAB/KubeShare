@@ -1,9 +1,9 @@
 package scheduler
 
 import (
-	"strconv"
-
 	sharedgpuv1 "KubeShare/pkg/apis/sharedgpu/v1"
+	"math"
+	"strconv"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog"
@@ -119,27 +119,33 @@ func GPUModelFilter(nodeResources NodeResources, nodeList []*corev1.Node, sharep
 
 func GPUMemoryFilter(nodeResources NodeResources, nodeList []*corev1.Node, sharepod *sharedgpuv1.SharePod) {
 	gpuMemRequest := int64(0)
-
-	if val, ok := sharepod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPUMemory]; ok {
+	val, ok := sharepod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPUMemory]
+	if ok {
 		gpuMemRequestTemp, err := strconv.ParseInt(val, 10, 64)
 		if err != nil || gpuMemRequestTemp < 0 {
 			return
 		}
 		gpuMemRequest = gpuMemRequestTemp
-	} else {
-		return
 	}
-
+	gpu_request := 0.0
+	request, request_ok := sharepod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPURequest]
+	if request_ok {
+		gpu_request, _ = strconv.ParseFloat(request, 64)
+	}
 	for nodeName, nodeRes := range nodeResources {
-
+		if !ok && request_ok {
+			gpuMemRequest = int64(math.Ceil(gpu_request * (float64)(nodeRes.GpuMemTotal)))
+		}
 		if nodeRes.GpuMemTotal-gpuMemRequest < 0 {
 			delete(nodeResources, nodeName)
+			klog.Infoln("Delete Node that gpu memory insufficient: ", nodeName)
 			continue
 		}
 
 		for GPUID, gpuInfo := range nodeRes.GpuFree {
 			if gpuInfo.GPUFreeMem-gpuMemRequest < 0 {
 				delete(nodeRes.GpuFree, GPUID)
+				klog.Infoln("Delete GPU that gpu memory insufficient: ", GPUID)
 			}
 		}
 

@@ -273,55 +273,61 @@ func (c *Controller) syncHandler(key string) error {
 
 	// GPU Pod needs to be filled with request, limit, memory, and GPUID, or none of them.
 	// If something weird, reject it (record the reason to user then return nil)
+	request, request_ok := sharepod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPURequest]
+	limit, limit_ok := sharepod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPULimit]
+	memory, memory_ok := sharepod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPUMemory]
+	GPUID, id_ok := sharepod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPUID]
 
-	if sharepod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPURequest] != "" ||
-		sharepod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPULimit] != "" ||
-		sharepod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPUMemory] != "" ||
-		sharepod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPUID] != "" {
-		var err error
-		gpu_limit, err = strconv.ParseFloat(sharepod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPULimit], 64)
+	if limit_ok {
+		gpu_limit, err = strconv.ParseFloat(limit, 64)
 		if err != nil || gpu_limit > 1.0 || gpu_limit < 0.0 {
 			utilruntime.HandleError(fmt.Errorf("SharePod %s/%s gpu_limit value error: %s", sharepod.ObjectMeta.Namespace, sharepod.ObjectMeta.Name, sharedgpuv1.KubeShareResourceGPULimit))
 			c.recorder.Event(sharepod, corev1.EventTypeWarning, ErrValueError, "Value error: "+sharedgpuv1.KubeShareResourceGPULimit)
 
 			if err := c.updateSharePodStaus(sharepod, sharedgpuv1.SharePodFailed, "gpu_limit value error"); err != nil {
-				utilruntime.HandleError(fmt.Errorf("SharePod %s/%s update error: %s", sharepod.ObjectMeta.Namespace, sharepod.ObjectMeta.Name))
+				utilruntime.HandleError(fmt.Errorf("SharePod %s/%s update error: %s", sharepod.ObjectMeta.Namespace, sharepod.ObjectMeta.Name, limit))
 			}
 			return nil
 		}
-		gpu_request, err = strconv.ParseFloat(sharepod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPURequest], 64)
-		if err != nil || gpu_request > gpu_limit || gpu_request < 0.0 {
+	}
+
+	if request_ok {
+		gpu_request, err = strconv.ParseFloat(request, 64)
+		if err != nil || (limit_ok && gpu_request > gpu_limit) || gpu_request < 0.0 {
 			utilruntime.HandleError(fmt.Errorf("SharePod %s/%s gpu_request value error: %s", sharepod.ObjectMeta.Namespace, sharepod.ObjectMeta.Name, sharedgpuv1.KubeShareResourceGPURequest))
 			c.recorder.Event(sharepod, corev1.EventTypeWarning, ErrValueError, "Value error: "+sharedgpuv1.KubeShareResourceGPURequest)
-
 			if err := c.updateSharePodStaus(sharepod, sharedgpuv1.SharePodFailed, "gpu_request value error"); err != nil {
-				utilruntime.HandleError(fmt.Errorf("SharePod %s/%s update error: %s", sharepod.ObjectMeta.Namespace, sharepod.ObjectMeta.Name))
+				utilruntime.HandleError(fmt.Errorf("SharePod %s/%s update error: %s", sharepod.ObjectMeta.Namespace, sharepod.ObjectMeta.Name, request))
 			}
-
-			return nil
 		}
-		//gpu_mem_annotation := sharepod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPUMemory]
+	}
 
-		gpu_mem, err = strconv.ParseInt(sharepod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPUMemory], 10, 64)
+	if memory_ok {
+		gpu_mem, err = strconv.ParseInt(memory, 10, 64)
 		if err != nil || gpu_mem < 0 {
 			utilruntime.HandleError(fmt.Errorf("SharePod %s/%s gpu_mem value error: %s", sharepod.ObjectMeta.Namespace, sharepod.ObjectMeta.Name, sharedgpuv1.KubeShareResourceGPUMemory))
 			c.recorder.Event(sharepod, corev1.EventTypeWarning, ErrValueError, "Value error: "+sharedgpuv1.KubeShareResourceGPUMemory)
 
 			if err := c.updateSharePodStaus(sharepod, sharedgpuv1.SharePodFailed, "gpu_mem value error"); err != nil {
-				utilruntime.HandleError(fmt.Errorf("SharePod %s/%s update error: %s", sharepod.ObjectMeta.Namespace, sharepod.ObjectMeta.Name))
+				utilruntime.HandleError(fmt.Errorf("SharePod %s/%s update error: %s", sharepod.ObjectMeta.Namespace, sharepod.ObjectMeta.Name, memory))
 			}
 			return nil
 		}
-		GPUID = sharepod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPUID]
+	}
+
+	if id_ok {
 		if len(GPUID) == 0 {
 			utilruntime.HandleError(fmt.Errorf("SharePod %s/%s GPUID value error: %s", sharepod.ObjectMeta.Namespace, sharepod.ObjectMeta.Name, sharedgpuv1.KubeShareResourceGPUID))
 			c.recorder.Event(sharepod, corev1.EventTypeWarning, ErrValueError, "Value error: "+sharedgpuv1.KubeShareResourceGPUID)
 
 			if err := c.updateSharePodStaus(sharepod, sharedgpuv1.SharePodPending, "GPUID need to be set"); err != nil {
-				utilruntime.HandleError(fmt.Errorf("SharePod %s/%s update error: %s", sharepod.ObjectMeta.Namespace, sharepod.ObjectMeta.Name))
+				utilruntime.HandleError(fmt.Errorf("SharePod %s/%s update error: %s", sharepod.ObjectMeta.Namespace, sharepod.ObjectMeta.Name, GPUID))
 			}
 			return nil
 		}
+	}
+
+	if request_ok || limit_ok || memory_ok || id_ok {
 		isGPUPod = true
 	}
 

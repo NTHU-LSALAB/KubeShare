@@ -98,27 +98,35 @@ func syncPodResources(nodeRes NodeResources, podList []*corev1.Pod, sharePodList
 		antiAffinityTag := ""
 		exclusionTag := ""
 
-		if sharePod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPURequest] != "" ||
-			sharePod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPULimit] != "" ||
-			sharePod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPUMemory] != "" ||
-			sharePod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPUID] != "" {
-			var err error
-			gpu_limit, err = strconv.ParseFloat(sharePod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPULimit], 64)
+		request, request_ok := sharePod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPURequest]
+		limit, limit_ok := sharePod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPULimit]
+		memory, memory_ok := sharePod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPUMemory]
+		var err error
+
+		if limit_ok {
+			gpu_limit, err = strconv.ParseFloat(limit, 64)
 			if err != nil || gpu_limit > 1.0 || gpu_limit < 0.0 {
 				continue
 			}
-			gpu_request, err = strconv.ParseFloat(sharePod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPURequest], 64)
-			if err != nil || gpu_request > gpu_limit || gpu_request < 0.0 {
+		}
+
+		if request_ok {
+			gpu_request, err = strconv.ParseFloat(request, 64)
+			if err != nil || (limit_ok && gpu_request > gpu_limit) || gpu_request < 0.0 {
 				continue
 			}
-			gpu_mem_annotation := sharePod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPUMemory]
-			if gpu_mem_annotation != "" {
-				gpu_mem, err = strconv.ParseInt(gpu_mem_annotation, 10, 64)
-				if err != nil || gpu_mem < 0 {
-					continue
-				}
+		}
+
+		if memory_ok {
+			gpu_mem, err = strconv.ParseInt(memory, 10, 64)
+			if err != nil || gpu_mem < 0 {
+				continue
 			}
-			GPUID = sharePod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPUID]
+		}
+
+		GPUID = sharePod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPUID]
+
+		if request_ok || limit_ok || memory_ok {
 			isGPUPod = true
 		}
 
@@ -215,6 +223,7 @@ func syncNodeResources(nodeList []*corev1.Node) (nodeResources NodeResources) {
 			}
 		}
 		if cannotScheduled {
+			wait.Done()
 			return
 		}
 
@@ -257,6 +266,7 @@ func syncNodeResources(nodeList []*corev1.Node) (nodeResources NodeResources) {
 			GpuFreeCount: gpuNum,
 			GpuFree:      make(map[string]*GPUInfo, gpuNum),
 		}
+		klog.Info("Node add Schedule, node name: ", node.ObjectMeta.Name)
 		nodeResourcesMux.Unlock()
 		wait.Done()
 	}
