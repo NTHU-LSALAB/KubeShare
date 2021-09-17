@@ -5,7 +5,6 @@ metadata:
   annotations:
     "sharedgpu/gpu_request": "0.4"
     "sharedgpu/gpu_limit": "1.0"
-    "sharedgpu/gpu_mem": "3145728000"
 spec:
   terminationGracePeriodSeconds: 0
   containers:
