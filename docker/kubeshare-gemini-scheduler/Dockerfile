@@ -1,7 +1,7 @@
 # call from repo root
 
-FROM nvidia/cuda:10.0-devel AS build
-
+FROM nvidia/cuda:11.4.0-devel-ubuntu18.04 AS build
+#nvidia/cuda:10.0-devel
 WORKDIR /tmp/build
 
 COPY . kubeshare

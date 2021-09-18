@@ -57,7 +57,7 @@ spec:
       serviceAccountName: kubeshare-scheduler
       containers:
         - name: kubeshare-scheduler
-          image: riyazhu/kubeshare-scheduler:20210706124950 #20210706124950 
+          image: riyazhu/kubeshare-scheduler:v1.0.0 #20210706124950 
           #      imagePullPolicy: Always
       priorityClassName: system-node-critical
       tolerations:
