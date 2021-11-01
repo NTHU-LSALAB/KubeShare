@@ -19,53 +19,66 @@ package main
 import (
 	"flag"
 	"os"
+	"strconv"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubeinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/klog"
 
 	// Uncomment the following line to load the gcp plugin (only required to authenticate against GKE clusters).
 	// _ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 
 	clientset "KubeShare/pkg/client/clientset/versioned"
 	informers "KubeShare/pkg/client/informers/externalversions"
+	"KubeShare/pkg/logger"
 	kubesharecontroller "KubeShare/pkg/scheduler"
 	"KubeShare/pkg/signals"
 )
 
+const (
+	// the file that store the kubeshare scheduler log file
+	KubeShareSchedulerLogPath = "kubeshare_scheduler.log"
+)
+
 var (
+	// parameter
 	masterURL  string
 	kubeconfig string
+	level      string
+	// the logger KubeShare Scheduler
+	ksl *logrus.Logger
 )
 
 func main() {
-	klog.InitFlags(nil)
+	//klog.InitFlags(nil)
 	flag.Parse()
+	levelType, _ := strconv.ParseInt(level, 10, 64)
+	ksl = logger.New(levelType, KubeShareSchedulerLogPath)
 
 	// set up signals so we handle the first shutdown signal gracefully
 	stopCh := signals.SetupSignalHandler()
 
 	cfg, err := clientcmd.BuildConfigFromFlags(masterURL, kubeconfig)
 	if err != nil {
-		klog.Fatalf("Error building kubeconfig: %s", err.Error())
+		ksl.Fatalf("Error building kubeconfig: %s", err.Error())
 	}
 
 	kubeClient, err := kubernetes.NewForConfig(cfg)
 	if err != nil {
-		klog.Fatalf("Error building kubernetes clientset: %s", err.Error())
+		ksl.Fatalf("Error building kubernetes clientset: %s", err.Error())
 	}
 
 	kubeshareClient, err := clientset.NewForConfig(cfg)
 	if err != nil {
-		klog.Fatalf("Error building example clientset: %s", err.Error())
+		ksl.Fatalf("Error building sharedPod clientset: %s", err.Error())
 	}
 
 	if !checkCRD(kubeshareClient) {
-		klog.Error("CRD doesn't exist. Exiting")
+		ksl.Error("CRD doesn't exist. Exiting")
 		os.Exit(1)
 	}
 
@@ -83,19 +96,20 @@ func main() {
 	kubeshareInformerFactory.Start(stopCh)
 
 	if err = controller.Run(1, stopCh); err != nil {
-		klog.Fatalf("Error running controller: %s", err.Error())
+		ksl.Fatalf("Error running controller: %s", err.Error())
 	}
 }
 
 func init() {
 	flag.StringVar(&kubeconfig, "kubeconfig", "", "Path to a kubeconfig. Only required if out-of-cluster.")
 	flag.StringVar(&masterURL, "master", "", "The address of the Kubernetes API server. Overrides any value in kubeconfig. Only required if out-of-cluster.")
+	flag.StringVar(&level, "level", "The level of KubeShare Scheduler logger.")
 }
 
 func checkCRD(kubeshareClientSet *clientset.Clientset) bool {
 	_, err := kubeshareClientSet.SharedgpuV1().SharePods("").List(metav1.ListOptions{})
 	if err != nil {
-		klog.Error(err)
+		ksl.Error(err)
 		if _, ok := err.(*errors.StatusError); ok {
 			if errors.IsNotFound(err) {
 				return false

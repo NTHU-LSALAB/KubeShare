@@ -30,6 +30,8 @@ import (
 	kubesharescheme "KubeShare/pkg/client/clientset/versioned/scheme"
 	informers "KubeShare/pkg/client/informers/externalversions/sharedgpu/v1"
 	listers "KubeShare/pkg/client/listers/sharedgpu/v1"
+
+	"github.com/sirupsen/logrus"
 )
 
 const controllerAgentName = "kubeshare-scheduler"
@@ -51,6 +53,10 @@ const (
 	KubeShareScheduleAffinity     = "sharedgpu/sched_affinity"
 	KubeShareScheduleAntiAffinity = "sharedgpu/sched_anti-affinity"
 	KubeShareScheduleExclusion    = "sharedgpu/sched_exclusion"
+)
+
+var (
+	ksl *logrus.Logger
 )
 
 // Controller is the controller implementation for Foo resources
