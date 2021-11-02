@@ -1,3 +1,9 @@
+CONTAINER_PREFIX?=riyazhu
+CONTAINER_NAME?=kubeshare-scheduler
+CONTAINER_VERSION?=test
+CONTAINER_IMAGE=$(CONTAINER_PREFIX)/$(CONTAINER_NAME):$(CONTAINER_VERSION)
+
+
 TARGET=kubeshare-scheduler kubeshare-device-manager kubeshare-config-client
 GO=go
 GO_MODULE=GO111MODULE=on
@@ -10,11 +16,30 @@ PACKAGE_PREFIX=KubeShare/cmd/
 
 all: $(TARGET)
 
-kubeshare-device-manager kubeshare-scheduler:
+kubeshare-device-manager:
+	$(GO_MODULE) $(ALPINE_COMPILE_FLAGS) $(GO) build -o $(BIN_DIR)$@ $(PACKAGE_PREFIX)$@
+
+kubeshare-scheduler:
 	$(GO_MODULE) $(ALPINE_COMPILE_FLAGS) $(GO) build -o $(BIN_DIR)$@ $(PACKAGE_PREFIX)$@
 
 kubeshare-config-client:
 	$(GO_MODULE) $(NVML_COMPILE_FLAGS) $(GO) build -o $(BIN_DIR)$@ $(PACKAGE_PREFIX)$@
+
+.PHONY: kubeshare-webhook
+kubeshare-webhook:
+	$(GO_MODULE) $(ALPINE_COMPILE_FLAGS) $(GO) build -o $(BIN_DIR)$@ $(PACKAGE_PREFIX)$@
+
+build-image:
+	docker build -t $(CONTAINER_IMAGE) -f ./docker/$(CONTAINER_NAME)/Dockerfile . --no-cache
+
+push-image:
+	docker push  $(CONTAINER_IMAGE) 
+
+deploy-component:
+	kubectl apply -f build/
+	
+delete-component:
+	kubectl delete -f build/
 
 clean:
 	rm $(BIN_DIR)* 2>/dev/null; exit 0

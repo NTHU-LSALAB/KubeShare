@@ -85,10 +85,20 @@ spec:
             - matchExpressions:
               - key: "node-role.kubernetes.io/master"
                 operator: "Exists"
-      restartPolicy: Always
+      restartPolicy: 
+      volumes:
+        - name: "kubeshare-log"
+          hostPath:
+            path: "/kubeshare/log"
       containers:
       - name: kubeshare-device-manager
-        image: riyazhu/kubeshare-device-manager:v1.0.0 #:20210706124950 
-        #        imagePullPolicy: Always
+        image: riyazhu/kubeshare-device-manager:test #:20210706124950 
+        imagePullPolicy: Always
+        command: ["kubeshare-device-manager"]
+        args:
+          - --level=3
+        volumeMounts:
+          - name: "kubeshare-log"
+            mountPath: "/kubeshare/log"
 ---
 

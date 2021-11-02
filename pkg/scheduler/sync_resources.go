@@ -9,7 +9,6 @@ import (
 	sharedgpuv1 "KubeShare/pkg/apis/sharedgpu/v1"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/klog"
 )
 
 func syncClusterResources(nodeList []*corev1.Node, podList []*corev1.Pod, sharePodList []*sharedgpuv1.SharePod) (nodeResources NodeResources) {
@@ -19,7 +18,7 @@ func syncClusterResources(nodeList []*corev1.Node, podList []*corev1.Pod, shareP
 }
 
 func syncPodResources(nodeRes NodeResources, podList []*corev1.Pod, sharePodList []*sharedgpuv1.SharePod) {
-	klog.Info("==============syncPodResources==============\n")
+	ksl.Debug("==============syncPodResources==============")
 	for _, pod := range podList {
 		nodeName := pod.Spec.NodeName
 		// 1. If Pod is not scheduled, it don't use resources.
@@ -148,22 +147,22 @@ func syncPodResources(nodeRes NodeResources, podList []*corev1.Pod, sharePodList
 						GPUFreeReq: 1000 - int64(math.Ceil(gpu_request*(float64)(1000.0))),
 						GPUFreeMem: nodeRes[nodeName].GpuMemTotal - gpu_mem,
 					}
-					klog.Info("GPU Mem: ", nodeRes[nodeName].GpuFree[GPUID])
+					ksl.Debug("GPU Mem: ", nodeRes[nodeName].GpuFree[GPUID])
 				} else {
-					klog.Errorf("==================================")
-					klog.Errorf("Bug! The rest number of free GPU is not enough for SharePod! GPUID: %s", GPUID)
+					ksl.Errorf("==================================")
+					ksl.Errorf("Bug! The rest number of free GPU is not enough for SharePod! GPUID: %s", GPUID)
 					for errID, errGPU := range nodeRes[nodeName].GpuFree {
-						klog.Errorf("GPUID: %s", errID)
-						klog.Errorf("    Req: %d", errGPU.GPUFreeReq)
-						klog.Errorf("    Mem: %d", errGPU.GPUFreeMem)
+						ksl.Errorf("GPUID: %s", errID)
+						ksl.Errorf("    Req: %d", errGPU.GPUFreeReq)
+						ksl.Errorf("    Mem: %d", errGPU.GPUFreeMem)
 					}
-					klog.Errorf("==================================")
+					ksl.Errorf("==================================")
 					continue
 				}
 			} else {
 				gpuInfo.GPUFreeReq -= int64(math.Ceil(gpu_request * (float64)(1000.0)))
 				gpuInfo.GPUFreeMem -= gpu_mem
-				klog.Info("GPU Mem: ", gpuInfo.GPUFreeMem)
+				ksl.Debug("GPU Mem: ", gpuInfo.GPUFreeMem)
 			}
 
 			if affinityTag != "" {
@@ -218,7 +217,7 @@ func syncNodeResources(nodeList []*corev1.Node) (nodeResources NodeResources) {
 		for _, taint := range node.Spec.Taints {
 			if string(taint.Effect) == "NoSchedule" {
 				cannotScheduled = true
-				klog.Info("Node have NoSchedule taint, node name: ", node.ObjectMeta.Name)
+				ksl.Info("Node have NoSchedule taint, node name: ", node.ObjectMeta.Name)
 				break
 			}
 		}
@@ -239,12 +238,12 @@ func syncNodeResources(nodeList []*corev1.Node) (nodeResources NodeResources) {
 				if len(gpuInfoArr) >= 1 {
 					gpuArr := strings.Split(gpuInfoArr[0], ":")
 					if len(gpuArr) != 2 {
-						klog.Errorf("GPU Info format error: %s", gpuInfo)
+						ksl.Errorf("GPU Info format error: %s", gpuInfo)
 						return 0
 					}
 					gpuMem, err := strconv.ParseInt(gpuArr[1], 10, 64)
 					if err != nil {
-						klog.Errorf("GPU Info format error: %s", gpuInfo)
+						ksl.Errorf("GPU Info format error: %s", gpuInfo)
 						return 0
 					}
 					return gpuMem
@@ -266,7 +265,7 @@ func syncNodeResources(nodeList []*corev1.Node) (nodeResources NodeResources) {
 			GpuFreeCount: gpuNum,
 			GpuFree:      make(map[string]*GPUInfo, gpuNum),
 		}
-		klog.Info("Node add Schedule, node name: ", node.ObjectMeta.Name)
+		ksl.Info("Node add Schedule, node name: ", node.ObjectMeta.Name)
 		nodeResourcesMux.Unlock()
 		wait.Done()
 	}

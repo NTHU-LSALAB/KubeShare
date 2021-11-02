@@ -6,7 +6,6 @@ import (
 	"strconv"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/klog"
 )
 
 var filters = []func(NodeResources, []*corev1.Node, *sharedgpuv1.SharePod){
@@ -53,7 +52,7 @@ func GPUExclusionFilter(nodeResources NodeResources, nodeList []*corev1.Node, sh
 			}
 			// vGPU without the labe -> delete gpu candidate
 			if len(gpuInfo.GPUExclusionTags) == 0 && ok {
-				klog.Info("GPUExclusion: ", gpuInfo.GPUExclusionTags)
+				ksl.Debug("GPUExclusion: ", gpuInfo.GPUExclusionTags)
 				delete(nodeRes.GpuFree, GPUID)
 			}
 		}
@@ -88,7 +87,7 @@ func NodeSelectorFilter(nodeResources NodeResources, nodeList []*corev1.Node, sh
 		for key, val := range sharePodLabels {
 			if label[key] != val {
 				delete(nodeResources, nodeList[i].Name)
-				klog.Infoln("Delete Node: ", nodeList[i].Name)
+				ksl.Debug("Delete Node: ", nodeList[i].Name)
 				break
 			}
 		}
@@ -107,12 +106,12 @@ func GPUModelFilter(nodeResources NodeResources, nodeList []*corev1.Node, sharep
 		if nodeGpuModel, ok := nodeList[i].ObjectMeta.Annotations[sharedgpuv1.KubeShareNodeGPUModel]; ok {
 			if nodeGpuModel != gpuModelTag {
 				delete(nodeResources, nodeList[i].Name)
-				klog.Infof("Delete Node %v with gpu card: %v\n", nodeList[i].Name, nodeGpuModel)
+				ksl.Debugf("Delete Node %v with gpu card: %v", nodeList[i].Name, nodeGpuModel)
 			}
 
 		} else {
 			delete(nodeResources, nodeList[i].Name)
-			klog.Infof("Delete Node %v: can't find gpu model\n", nodeList[i].Name)
+			ksl.Debugf("Delete Node %v: can't find gpu model", nodeList[i].Name)
 		}
 	}
 }
@@ -138,14 +137,14 @@ func GPUMemoryFilter(nodeResources NodeResources, nodeList []*corev1.Node, share
 		}
 		if nodeRes.GpuMemTotal-gpuMemRequest < 0 {
 			delete(nodeResources, nodeName)
-			klog.Infoln("Delete Node that gpu memory insufficient: ", nodeName)
+			ksl.Debug("Delete Node that gpu memory insufficient: ", nodeName)
 			continue
 		}
 
 		for GPUID, gpuInfo := range nodeRes.GpuFree {
 			if gpuInfo.GPUFreeMem-gpuMemRequest < 0 {
 				delete(nodeRes.GpuFree, GPUID)
-				klog.Infoln("Delete GPU that gpu memory insufficient: ", GPUID)
+				ksl.Debug("Delete GPU that gpu memory insufficient: ", GPUID)
 			}
 		}
 

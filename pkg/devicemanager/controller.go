@@ -25,19 +25,20 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
-	"k8s.io/klog"
 
 	sharedgpuv1 "KubeShare/pkg/apis/sharedgpu/v1"
 	clientset "KubeShare/pkg/client/clientset/versioned"
 	kubesharescheme "KubeShare/pkg/client/clientset/versioned/scheme"
 	informers "KubeShare/pkg/client/informers/externalversions/sharedgpu/v1"
 	listers "KubeShare/pkg/client/listers/sharedgpu/v1"
+
+	"github.com/sirupsen/logrus"
 )
 
-const controllerAgentName = "kubeshare-controller"
-const schedulerName = "kubeshare-scheduler"
-
 const (
+	controllerAgentName = "kubeshare-controller"
+	schedulerName       = "kubeshare-scheduler"
+
 	// SuccessSynced is used as part of the Event 'reason' when a SharePod is synced
 	SuccessSynced = "Synced"
 	// ErrResourceExists is used as part of the Event 'reason' when a SharePod fails
@@ -56,6 +57,10 @@ const (
 	KubeShareLibraryPath = "/kubeshare/library"
 	SchedulerIpPath      = KubeShareLibraryPath + "/schedulerIP.txt"
 	PodManagerPortStart  = 50050
+)
+
+var (
+	ksl *logrus.Logger
 )
 
 type Controller struct {
@@ -83,15 +88,17 @@ func NewController(
 	kubeclientset kubernetes.Interface,
 	kubeshareclientset clientset.Interface,
 	podInformer coreinformers.PodInformer,
-	kubeshareInformer informers.SharePodInformer) *Controller {
+	kubeshareInformer informers.SharePodInformer,
+	kubeShareLogger *logrus.Logger) *Controller {
 
+	ksl = kubeShareLogger
 	// Create event broadcaster
 	// Add kubeshare-controller types to the default Kubernetes Scheme so Events can be
 	// logged for kubeshare-controller types.
 	utilruntime.Must(kubesharescheme.AddToScheme(scheme.Scheme))
-	klog.V(4).Info("Creating event broadcaster")
+	ksl.Info("Creating event broadcaster")
 	eventBroadcaster := record.NewBroadcaster()
-	eventBroadcaster.StartLogging(klog.Infof)
+	eventBroadcaster.StartLogging(ksl.Infof)
 	eventBroadcaster.StartRecordingToSink(&typedcorev1.EventSinkImpl{Interface: kubeclientset.CoreV1().Events("")})
 	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: controllerAgentName})
 
@@ -106,7 +113,7 @@ func NewController(
 		recorder:           recorder,
 	}
 
-	klog.Info("Setting up event handlers")
+	ksl.Info("Setting up event handlers")
 	// Set up an event handler for when SharePod resources change
 	kubeshareInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: controller.enqueueSharePod,
@@ -148,10 +155,10 @@ func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) error {
 	defer c.workqueue.ShutDown()
 
 	// Start the informer factories to begin populating the informer caches
-	klog.Info("Starting SharePod controller")
+	ksl.Info("Starting SharePod controller")
 
 	// Wait for the caches to be synced before starting workers
-	klog.Info("Waiting for informer caches to sync")
+	ksl.Info("Waiting for informer caches to sync")
 	if ok := cache.WaitForCacheSync(stopCh, c.podsSynced, c.sharepodsSynced); !ok {
 		return fmt.Errorf("failed to wait for caches to sync")
 	}
@@ -164,15 +171,15 @@ func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) error {
 	// so call it after initNodeClient
 	go StartConfigManager(stopCh, c.kubeclientset)
 
-	klog.Info("Starting workers")
+	ksl.Info("Starting workers")
 	// Launch two workers to process SharePod resources
 	for i := 0; i < threadiness; i++ {
 		go wait.Until(c.runWorker, time.Second, stopCh)
 	}
 
-	klog.Info("Started workers")
+	ksl.Info("Started workers")
 	<-stopCh
-	klog.Info("Shutting down workers")
+	ksl.Info("Shutting down workers")
 
 	return nil
 }
@@ -228,7 +235,7 @@ func (c *Controller) processNextWorkItem() bool {
 		// Finally, if no error occurs we Forget this item so it does not
 		// get queued again until another change happens.
 		c.workqueue.Forget(obj)
-		klog.Infof("Successfully synced '%s'", key)
+		ksl.Infof("Successfully synced '%s'", key)
 		return nil
 	}(obj)
 
@@ -336,12 +343,12 @@ func (c *Controller) syncHandler(key string) error {
 	if isGPUPod { //&& sharepod.Status.BoundDeviceID == ""
 		var errCode int
 		physicalGPUuuid, errCode = c.getPhysicalGPUuuid(sharepod.Spec.NodeName, GPUID, gpu_request, gpu_limit, gpu_mem, key, &physicalGPUport)
-		klog.Info("Assigned Port number is ", physicalGPUport, "\n")
+		ksl.Debug("Assigned Port number is ", physicalGPUport, "\n")
 		switch errCode {
 		case 0:
-			klog.Infof("SharePod %s is bound to GPU uuid: %s", key, physicalGPUuuid)
+			ksl.Infof("SharePod %s is bound to GPU uuid: %s", key, physicalGPUuuid)
 		case 1:
-			klog.Infof("SharePod %s/%s is waiting for dummy Pod", sharepod.ObjectMeta.Namespace, sharepod.ObjectMeta.Name)
+			ksl.Infof("SharePod %s/%s is waiting for dummy Pod", sharepod.ObjectMeta.Namespace, sharepod.ObjectMeta.Name)
 			return nil
 		case 2:
 			err := fmt.Errorf("Resource exceed!")
@@ -385,7 +392,7 @@ func (c *Controller) syncHandler(key string) error {
 		c.recorder.Event(sharepod, corev1.EventTypeWarning, ErrResourceExists, msg)
 		return fmt.Errorf(msg)
 	}
-	klog.Info("Port number is ", physicalGPUport, "\n")
+	ksl.Debug("Port number is ", physicalGPUport)
 	if (pod.Spec.RestartPolicy == corev1.RestartPolicyNever && (pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed)) ||
 		(pod.Spec.RestartPolicy == corev1.RestartPolicyOnFailure && pod.Status.Phase == corev1.PodSucceeded) {
 		go c.removeSharePodFromList(sharepod)
@@ -401,7 +408,7 @@ func (c *Controller) syncHandler(key string) error {
 }
 
 func (c *Controller) updateSharePodStaus(sharepod *sharedgpuv1.SharePod, phase sharedgpuv1.SharePodPhase, message string) error {
-	//klog.V(4).Infof("updateSharePodStatus\n")
+	//ksl.V(4).Infof("updateSharePodStatus\n")
 
 	sharepodCopy := sharepod.DeepCopy()
 	sharepodCopy.Status.Phase = phase
@@ -412,7 +419,7 @@ func (c *Controller) updateSharePodStaus(sharepod *sharedgpuv1.SharePod, phase s
 }
 
 func (c *Controller) updateSharePodWithPodStatus(sharepod *sharedgpuv1.SharePod, pod *corev1.Pod, port int, phase sharedgpuv1.SharePodPhase, message string) error {
-	//klog.V(4).Infof("updateSharePodWithPodStatus\n")
+	//ksl.V(4).Infof("updateSharePodWithPodStatus\n")
 
 	sharepodCopy := sharepod.DeepCopy()
 	sharepodCopy.Status.PodStatus = pod.Status.DeepCopy()
@@ -461,9 +468,9 @@ func (c *Controller) handleObject(obj interface{}) {
 			utilruntime.HandleError(fmt.Errorf("error decoding object tombstone, invalid type"))
 			return
 		}
-		klog.V(4).Infof("Recovered deleted object '%s' from tombstone", object.GetName())
+		ksl.Infof("Recovered deleted object '%s' from tombstone", object.GetName())
 	}
-	klog.V(4).Infof("Processing object: %s", object.GetName())
+	ksl.Infof("Processing object: %s", object.GetName())
 
 	// get physical GPU UUID from dummy Pod
 	// get UUID here to prevent request throttling
@@ -476,7 +483,7 @@ func (c *Controller) handleObject(obj interface{}) {
 				if gpuid, ok := pod.ObjectMeta.Labels[sharedgpuv1.KubeShareResourceGPUID]; ok {
 					needSetUUID := false
 					nodesInfoMux.Lock()
-					// klog.Infof("ERICYEH1: %#v", nodeClients[pod.Spec.NodeName])
+					// ksl.Infof("ERICYEH1: %#v", nodeClients[pod.Spec.NodeName])
 					if node, ok := nodesInfo[pod.Spec.NodeName]; ok {
 						if _, ok := node.GPUID2GPU[gpuid]; ok && node.GPUID2GPU[gpuid].UUID == "" {
 							needSetUUID = true
@@ -484,14 +491,14 @@ func (c *Controller) handleObject(obj interface{}) {
 					}
 					nodesInfoMux.Unlock()
 					if needSetUUID {
-						klog.Infof("Start go routine to get UUID from dummy Pod")
+						ksl.Infof("Start go routine to get UUID from dummy Pod")
 						go c.getAndSetUUIDFromDummyPod(pod.Spec.NodeName, gpuid, pod.ObjectMeta.Name, pod)
 					}
 				} else {
-					klog.Errorf("Detect empty %s label from dummy Pod: %s", sharedgpuv1.KubeShareResourceGPUID, pod.ObjectMeta.Name)
+					ksl.Errorf("Detect empty %s label from dummy Pod: %s", sharedgpuv1.KubeShareResourceGPUID, pod.ObjectMeta.Name)
 				}
 			} else {
-				klog.Errorf("Detect empty NodeName from dummy Pod: %s", pod.ObjectMeta.Name)
+				ksl.Errorf("Detect empty NodeName from dummy Pod: %s", pod.ObjectMeta.Name)
 			}
 		}
 	}
@@ -505,7 +512,7 @@ func (c *Controller) handleObject(obj interface{}) {
 
 		foo, err := c.sharepodsLister.SharePods(object.GetNamespace()).Get(ownerRef.Name)
 		if err != nil {
-			klog.V(4).Infof("ignoring orphaned object '%s' of SharePod '%s'", object.GetSelfLink(), ownerRef.Name)
+			ksl.Warnf("ignoring orphaned object '%s' of SharePod '%s'", object.GetSelfLink(), ownerRef.Name)
 			return
 		}
 
@@ -523,7 +530,7 @@ func (c *Controller) handleObject(obj interface{}) {
 // 2. Pod Phase
 func newPod(sharepod *sharedgpuv1.SharePod, isGPUPod bool, podManagerIP string, podManagerPort int) *corev1.Pod {
 
-	klog.V(4).Infof("newPod with port: ", podManagerPort, "\n")
+	ksl.Debug("newPod with port: ", podManagerPort)
 	specCopy := sharepod.Spec.DeepCopy()
 	labelCopy := make(map[string]string, len(sharepod.ObjectMeta.Labels))
 	for key, val := range sharepod.ObjectMeta.Labels {
@@ -535,7 +542,7 @@ func newPod(sharepod *sharedgpuv1.SharePod, isGPUPod bool, podManagerIP string, 
 	}
 	specCopy.SchedulerName = schedulerName
 	if isGPUPod {
-		klog.V(4).Infof("isGPUPod : %t\n", isGPUPod)
+		ksl.Debug("isGPUPod : ", isGPUPod)
 		// specCopy.Containers = append(specCopy.Containers, corev1.Container{
 		// 	Name:    "podmanager",
 		// 	Image:   "ncy9371/debian:stretch-slim-wget",

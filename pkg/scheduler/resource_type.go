@@ -1,9 +1,5 @@
 package scheduler
 
-import (
-	"k8s.io/klog"
-)
-
 /* ------------------- struct NodeResources start ------------------- */
 
 // NodeResources: Available resources in cluster to schedule Training Jobs
@@ -19,20 +15,20 @@ func (this *NodeResources) DeepCopy() *NodeResources {
 
 func (this *NodeResources) PrintMe() {
 	for name, res := range *this {
-		klog.Infof("============ Node: %s ============", name)
-		klog.Infof("CpuTotal: %d", res.CpuTotal)
-		klog.Infof("MemTotal: %d", res.MemTotal)
-		klog.Infof("GpuTotal: %d", res.GpuTotal)
-		klog.Infof("GpuMemTotal: %d", res.GpuMemTotal)
-		klog.Infof("CpuFree: %d", res.CpuFree)
-		klog.Infof("MemFree: %d", res.MemFree)
-		klog.Infof("GpuFree: %d", res.GpuFreeCount)
-		klog.Infof("GpuId:")
+		ksl.Debugf("============ Node: %s ============", name)
+		ksl.Debugf("CpuTotal: %d", res.CpuTotal)
+		ksl.Debugf("MemTotal: %d", res.MemTotal)
+		ksl.Debugf("GpuTotal: %d", res.GpuTotal)
+		ksl.Debugf("GpuMemTotal: %d", res.GpuMemTotal)
+		ksl.Debugf("CpuFree: %d", res.CpuFree)
+		ksl.Debugf("MemFree: %d", res.MemFree)
+		ksl.Debugf("GpuFree: %d", res.GpuFreeCount)
+		ksl.Debugf("GpuId:")
 		for id, gpu := range res.GpuFree {
-			klog.Infof("    %s: %d, %d", id, (*gpu).GPUFreeReq, (*gpu).GPUFreeMem)
+			ksl.Debugf("    %s: %d, %d", id, (*gpu).GPUFreeReq, (*gpu).GPUFreeMem)
 		}
 	}
-	klog.Infof("============ Node Info End ============")
+	ksl.Debugf("============ Node Info End ============")
 }
 
 /* ------------------- struct NodeResources end ------------------- */
@@ -81,7 +77,7 @@ type GPUInfo struct {
 	// GPUFreeMem in bytes
 	GPUFreeMem int64
 
-	GPUAffinityTags []string
+	GPUAffinityTags     []string
 	GPUAntiAffinityTags []string
 	// len(GPUExclusionTags) should be only one
 	GPUExclusionTags []string
@@ -103,9 +99,9 @@ func (this *GPUInfo) DeepCopy() *GPUInfo {
 	return &GPUInfo{
 		GPUFreeReq:          this.GPUFreeReq,
 		GPUFreeMem:          this.GPUFreeMem,
-		GPUAffinityTags: tmpGPUAffinityTags,
+		GPUAffinityTags:     tmpGPUAffinityTags,
 		GPUAntiAffinityTags: tmpGPUAntiAffinityTags,
-		GPUExclusionTags: tmpGPUExclusionTags,
+		GPUExclusionTags:    tmpGPUExclusionTags,
 	}
 }
 

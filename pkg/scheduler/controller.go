@@ -23,7 +23,6 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
-	"k8s.io/klog"
 
 	sharedgpuv1 "KubeShare/pkg/apis/sharedgpu/v1"
 	clientset "KubeShare/pkg/client/clientset/versioned"
@@ -83,12 +82,14 @@ func NewController(
 	kubeshareclientset clientset.Interface,
 	nodeInformer coreinformers.NodeInformer,
 	podInformer coreinformers.PodInformer,
-	kubeshareInformer informers.SharePodInformer) *Controller {
+	kubeshareInformer informers.SharePodInformer,
+	kubeShareLogger *logrus.Logger) *Controller {
 
+	ksl = kubeShareLogger
 	utilruntime.Must(kubesharescheme.AddToScheme(scheme.Scheme))
-	klog.V(4).Info("Creating event broadcaster")
+	ksl.Info("Creating event broadcaster")
 	eventBroadcaster := record.NewBroadcaster()
-	eventBroadcaster.StartLogging(klog.Infof)
+	eventBroadcaster.StartLogging(ksl.Infof)
 	eventBroadcaster.StartRecordingToSink(&typedcorev1.EventSinkImpl{Interface: kubeclientset.CoreV1().Events("")})
 	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: controllerAgentName})
 
@@ -107,7 +108,7 @@ func NewController(
 		pendingListMux:     &sync.Mutex{},
 	}
 
-	klog.Info("Setting up event handlers")
+	ksl.Info("Setting up event handlers")
 
 	kubeshareInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc:    controller.enqueueSharePod,
@@ -129,14 +130,14 @@ func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) error {
 	defer utilruntime.HandleCrash()
 	defer c.workqueue.ShutDown()
 
-	klog.Info("Starting Foo controller")
+	ksl.Info("Starting sharedPod controller")
 
-	klog.Info("Waiting for informer caches to sync")
+	ksl.Info("Waiting for informer caches to sync")
 	if ok := cache.WaitForCacheSync(stopCh, c.podsSynced, c.sharepodsSynced); !ok {
 		return fmt.Errorf("failed to wait for caches to sync")
 	}
 
-	klog.Info("Starting workers")
+	ksl.Info("Starting workers")
 	for i := 0; i < threadiness; i++ {
 		go wait.Until(c.runWorker, time.Second, stopCh)
 	}
@@ -145,9 +146,9 @@ func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) error {
 	pendingInsuranceDone := make(chan bool)
 	go c.pendingInsurance(pendingInsuranceTicker, &pendingInsuranceDone)
 
-	klog.Info("Started workers")
+	ksl.Info("Started workers")
 	<-stopCh
-	klog.Info("Shutting down workers")
+	ksl.Info("Shutting down workers")
 	pendingInsuranceTicker.Stop()
 	pendingInsuranceDone <- true
 
@@ -183,7 +184,7 @@ func (c *Controller) processNextWorkItem() bool {
 		}
 
 		c.workqueue.Forget(obj)
-		klog.Infof("Successfully synced '%s'", key)
+		ksl.Infof("Successfully synced '%s'", key)
 		return nil
 	}(obj)
 
@@ -289,7 +290,7 @@ func (c *Controller) syncHandler(key string) error {
 	// TODO: when gpu_mem == 0
 	schedNode, schedGPUID, gpu_mem := scheduleSharePod(isGPUPod, gpu_request, gpu_mem, gpu_mem_set, sharepod, nodeList, podList, sharePodList)
 	if schedNode == "" {
-		klog.Infof("No enough resources for SharePod: %s/%s", sharepod.ObjectMeta.Namespace, sharepod.ObjectMeta.Name)
+		ksl.Infof("No enough resources for SharePod: %s/%s", sharepod.ObjectMeta.Namespace, sharepod.ObjectMeta.Name)
 
 		if sharepod, err = c.updateSharePodStatus(sharepod, sharedgpuv1.SharePodPending, "No enough resources for SharePod"); err != nil {
 			utilruntime.HandleError(fmt.Errorf("SharePod %s/%s  update error", sharepod.ObjectMeta.Namespace, sharepod.ObjectMeta.Name))
@@ -301,17 +302,17 @@ func (c *Controller) syncHandler(key string) error {
 		c.pendingListMux.Unlock()
 		return nil
 	} else {
-		klog.Infoln("sharePod: ", sharepod.Namespace, "/", sharepod.Name)
+		ksl.Infoln("sharePod: ", sharepod.Namespace, "/", sharepod.Name)
 		if request_ok && !memory_ok {
 			shp, err := c.updateSharePodGpuMem(sharepod, strconv.FormatInt(gpu_mem, 10))
 			sharepod = shp
 			if err != nil {
-				klog.Errorf("update annotation error: %v", err)
+				ksl.Errorf("update annotation error: %v", err)
 			}
 		}
 	}
 
-	klog.Infof("SharePod '%s' had been scheduled to node '%s' GPUID '%s'.", key, schedNode, schedGPUID)
+	ksl.Infof("SharePod '%s' had been scheduled to node '%s' GPUID '%s'.", key, schedNode, schedGPUID)
 
 	if err := c.bindSharePodToNode(sharepod, schedNode, schedGPUID, sharedgpuv1.SharePodPending, "SharePod success to bind to node, wait to create pod"); err != nil {
 		if sharepod, err = c.updateSharePodStatus(sharepod, sharedgpuv1.SharePodPending, "Current can not bind to node"); err != nil {
@@ -325,7 +326,7 @@ func (c *Controller) syncHandler(key string) error {
 }
 
 func (c *Controller) updateSharePodStatus(sharepod *sharedgpuv1.SharePod, phase sharedgpuv1.SharePodPhase, message string) (*sharedgpuv1.SharePod, error) {
-	klog.V(4).Infof("updateSharePodStatus\n")
+	ksl.Debug("updateSharePodStatus")
 
 	sharepodCopy := sharepod.DeepCopy()
 	sharepodCopy.Status.Phase = phase
@@ -384,7 +385,7 @@ func (c *Controller) resourceChanged(obj interface{}) {
 }
 
 func (c *Controller) updateSharePodGpuMem(sharepod *sharedgpuv1.SharePod, gpuMem string) (*sharedgpuv1.SharePod, error) {
-	klog.V(4).Infof("updateSharePodGpuMem\n")
+	ksl.Debugf("updateSharePodGpuMem")
 
 	sharepodCopy := sharepod.DeepCopy()
 	/*if _, exist := sharepod.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPURequest]; exist {
@@ -392,9 +393,9 @@ func (c *Controller) updateSharePodGpuMem(sharepod *sharedgpuv1.SharePod, gpuMem
 	}
 	*/
 	sharepodCopy.ObjectMeta.Annotations[sharedgpuv1.KubeShareResourceGPUMemory] = gpuMem
-	klog.Infoln("sharePod: ", sharepodCopy.Namespace, "/", sharepodCopy.Name)
+	ksl.Debug("sharePod: ", sharepodCopy.Namespace, "/", sharepodCopy.Name)
 	for key, val := range sharepodCopy.ObjectMeta.Annotations {
-		klog.Infof("Annotation=  %v  : %v\n", key, val)
+		ksl.Debugf("Annotation=  %v  : %v", key, val)
 	}
 
 	shp, err := c.kubeshareclientset.SharedgpuV1().SharePods(sharepodCopy.Namespace).Update(sharepodCopy)

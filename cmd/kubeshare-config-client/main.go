@@ -2,35 +2,45 @@ package main
 
 import (
 	"flag"
-	"log"
+
+	"KubeShare/pkg/configclient"
+	"KubeShare/pkg/logger"
 
 	"github.com/NVIDIA/gpu-monitoring-tools/bindings/go/nvml"
-	"k8s.io/klog"
-	"KubeShare/pkg/configclient"
+	"github.com/sirupsen/logrus"
 )
 
 var (
 	server string
+	level  int64
+	ksl    *logrus.Logger
+)
+
+const (
+	// the file storing the kubeshare config client log
+	KubeShareConfigClientLogPath = "kubeshare_config_client.log"
 )
 
 func main() {
-	klog.InitFlags(nil)
 	flag.Parse()
+	ksl = logger.New(level, KubeShareConfigClientLogPath)
+	ksl.Info("The level of logger: ", level)
 
-	log.Println("Loading NVML")
+	ksl.Println("Loading NVML")
 	if err := nvml.Init(); err != nil {
-		log.Printf("Failed to initialize NVML: %s.", err)
-		log.Printf("If this is a GPU node, did you set the docker default runtime to `nvidia`?")
-		log.Printf("You can check the prerequisites at: https://github.com/NVIDIA/k8s-device-plugin#prerequisites")
-		log.Printf("You can learn how to set the runtime at: https://github.com/NVIDIA/k8s-device-plugin#quick-start")
+		ksl.Printf("Failed to initialize NVML: %s.", err)
+		ksl.Printf("If this is a GPU node, did you set the docker default runtime to `nvidia`?")
+		ksl.Printf("You can check the prerequisites at: https://github.com/NVIDIA/k8s-device-plugin#prerequisites")
+		ksl.Printf("You can learn how to set the runtime at: https://github.com/NVIDIA/k8s-device-plugin#quick-start")
 
 		select {}
 	}
-	defer func() { log.Println("Shutdown of NVML returned:", nvml.Shutdown()) }()
+	defer func() { ksl.Println("Shutdown of NVML returned:", nvml.Shutdown()) }()
 
-	configclient.Run(server)
+	configclient.Run(server, ksl)
 }
 
 func init() {
 	flag.StringVar(&server, "server-ip", "127.0.0.1:9797", "IP:port of configfile manager.")
+	flag.Int64Var(&level, "level", 2, "The level of KubeShare Config Client log.")
 }

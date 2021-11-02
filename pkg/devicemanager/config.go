@@ -15,7 +15,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/klog"
 
 	sharedgpuv1 "KubeShare/pkg/apis/sharedgpu/v1"
 	"KubeShare/pkg/lib/bitmap"
@@ -49,11 +48,11 @@ func StartConfigManager(stopCh <-chan struct{}, kc kubernetes.Interface) error {
 	kubeClient = kc
 
 	rand.Seed(time.Now().Unix())
-	klog.Infof("Start listening on 0.0.0.0:9797...")
+	ksl.Infof("Start listening on 0.0.0.0:9797...")
 	netListen, err := net.Listen("tcp", "0.0.0.0:9797")
 	if err != nil {
 		msg := fmt.Sprintf("Cannot listening to 0.0.0.0:9797: %s", err.Error())
-		klog.Errorf(msg)
+		ksl.Errorf(msg)
 		return fmt.Errorf(msg)
 	}
 	defer netListen.Close()
@@ -61,14 +60,14 @@ func StartConfigManager(stopCh <-chan struct{}, kc kubernetes.Interface) error {
 	timer := time.NewTicker(time.Second * 60)
 	go periodicallyCheckHeartbeats(timer.C)
 
-	klog.Infof("Waiting for clients...")
+	ksl.Infof("Waiting for clients...")
 	for {
 		conn, err := netListen.Accept()
 		if err != nil {
-			klog.Errorf("Error when connect to a client: %s", err.Error())
+			ksl.Errorf("Error when connect to a client: %s", err.Error())
 			continue
 		}
-		klog.Infof("Connect to a client, addr:port=%s", conn.RemoteAddr().String())
+		ksl.Infof("Connect to a client, addr:port=%s", conn.RemoteAddr().String())
 
 		go clientHandler(conn)
 	}
@@ -81,11 +80,11 @@ func clientHandler(conn net.Conn) {
 	hostname := ""
 	hostnameMess, err := reader.ReadString('\n')
 	if err != nil {
-		klog.Errorf("Error when receive hostname from client")
+		ksl.Errorf("Error when receive hostname from client")
 		return
 	}
 	if tmp := strings.Split(string(hostnameMess), ":"); tmp[0] != "hostname" {
-		klog.Errorf("Wrong identification when receving hostname")
+		ksl.Errorf("Wrong identification when receving hostname")
 		return
 	} else {
 		hostname = tmp[1][:len(tmp[1])-1]
@@ -96,33 +95,33 @@ func clientHandler(conn net.Conn) {
 	nodeName := ""
 	pod, err := kubeClient.CoreV1().Pods("kube-system").Get(hostname, metav1.GetOptions{})
 	if errors.IsNotFound(err) {
-		klog.Errorf("ConfigFileClient Pod name: %s, not found!", hostname)
+		ksl.Errorf("ConfigFileClient Pod name: %s, not found!", hostname)
 		return
 	}
 	nodeName = pod.Spec.NodeName
 
 	nvidiaDviceModelMsg, err := reader.ReadString('\n')
 	if err != nil {
-		klog.Errorf("Error when receive nvidia device model from client")
+		ksl.Errorf("Error when receive nvidia device model from client")
 		return
 	}
 	var nvidiaDviceModelStr string
 	if tmp := strings.Split(string(nvidiaDviceModelMsg), ":"); tmp[0] != "NvidiaDeviceModel" {
-		klog.Errorf("Wrong identification when receving nvidia device model\n")
+		ksl.Errorf("Wrong identification when receving nvidia device model\n")
 		return
 	} else {
 		nvidiaDviceModelStr = tmp[1][:len(tmp[1])-1]
 	}
 
-	klog.Infof("Receive device model from node: %s, model: %s", nodeName, nvidiaDviceModelStr)
+	ksl.Infof("Receive device model from node: %s, model: %s", nodeName, nvidiaDviceModelStr)
 
 	nvidiaDevicesMsg, err := reader.ReadString('\n')
 	if err != nil {
-		klog.Errorf("Error when receive nvidia devices list from client")
+		ksl.Errorf("Error when receive nvidia devices list from client")
 		return
 	}
 	nvidiaDevicesStr := string(nvidiaDevicesMsg)
-	klog.Infof("Receive device list from node: %s, devices: %s", nodeName, nvidiaDevicesStr)
+	ksl.Infof("Receive device list from node: %s, devices: %s", nodeName, nvidiaDevicesStr)
 	deviceIDArr := strings.Split(nvidiaDevicesStr[:len(nvidiaDevicesStr)-1], ",")
 	uuid2mem := make(map[string]string, len(deviceIDArr)-1)
 	uuid2port := make(map[string]string, len(deviceIDArr)-1)
@@ -183,11 +182,11 @@ func clientHandler(conn net.Conn) {
 		isError := false
 		heartbeatMess, err := reader.ReadString('\n')
 		if err != nil {
-			klog.Errorf("Error when receive heartbeat from: %s", nodeName)
+			ksl.Errorf("Error when receive heartbeat from: %s", nodeName)
 			isError = true
 		}
 		if string(heartbeatMess) != "heartbeat!\n" {
-			klog.Errorf("Error when receive 'heartbeat!' string from: %s", nodeName)
+			ksl.Errorf("Error when receive 'heartbeat!' string from: %s", nodeName)
 			isError = true
 		}
 		nodeStatusMux.Lock()
@@ -201,7 +200,7 @@ func clientHandler(conn net.Conn) {
 		if isError {
 			return
 		} else {
-			klog.Infof("Receive heartbeat from node: %s", nodeName)
+			ksl.Infof("Receive heartbeat from node: %s", nodeName)
 		}
 	}
 }
@@ -216,7 +215,7 @@ func UpdateNodeGPUInfo(nodeName string, uuid2mem *map[string]string, nvidiaDvice
 	}
 	node, err := kubeClient.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
 	if err != nil {
-		klog.Errorf("Error when Get node %s, :%s", nodeName, err)
+		ksl.Errorf("Error when Get node %s, :%s", nodeName, err)
 	}
 	newNode := node.DeepCopy()
 	if newNode.ObjectMeta.Annotations == nil {
@@ -224,12 +223,12 @@ func UpdateNodeGPUInfo(nodeName string, uuid2mem *map[string]string, nvidiaDvice
 	}
 	gpuinfo := buf.String()
 	newNode.ObjectMeta.Annotations[sharedgpuv1.KubeShareNodeGPUInfo] = gpuinfo
-	klog.Infof("Update node %s GPU info: %s", nodeName, gpuinfo)
+	ksl.Debugf("Update node %s GPU info: %s", nodeName, gpuinfo)
 	newNode.ObjectMeta.Annotations[sharedgpuv1.KubeShareNodeGPUModel] = nvidiaDviceModel
-	klog.Infof("Update node %s GPU Model info: %s", nodeName, nvidiaDviceModel)
+	ksl.Debugf("Update node %s GPU Model info: %s", nodeName, nvidiaDviceModel)
 	_, err = kubeClient.CoreV1().Nodes().Update(newNode)
 	if err != nil {
-		klog.Errorf("Error when updating Node %s annotation, err: %s, spec: %v", nodeName, err, newNode)
+		ksl.Errorf("Error when updating Node %s annotation, err: %s, spec: %v", nodeName, err, newNode)
 	}
 }
 
@@ -254,12 +253,12 @@ func syncConfig(nodeName, UUID string, podList *list.List) error {
 
 	if !ok {
 		msg := fmt.Sprintf("No client node: %s", nodeName)
-		klog.Errorf(msg)
+		ksl.Errorf(msg)
 		return fmt.Errorf(msg)
 	}
 	if client.ClientStatus != ClientReady {
 		msg := fmt.Sprintf("Node status is not ready when SyncConfig(): %s", nodeName)
-		klog.Errorf(msg)
+		ksl.Errorf(msg)
 		return fmt.Errorf(msg)
 	}
 
@@ -294,10 +293,10 @@ func syncConfig(nodeName, UUID string, podList *list.List) error {
 
 	buf.WriteString("\n")
 
-	klog.Infof("Syncing to node '%s' with content: '%s'", nodeName, buf.String())
+	ksl.Infof("Syncing to node '%s' with content: '%s'", nodeName, buf.String())
 	if _, err := client.Conn.Write(buf.Bytes()); err != nil {
 		msg := fmt.Sprintf("Error when write '%s' to Conn of node: %s", buf.String(), nodeName)
-		klog.Errorf(msg)
+		ksl.Errorf(msg)
 		return fmt.Errorf(msg)
 	}
 

@@ -19,7 +19,6 @@ package main
 import (
 	"flag"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -48,7 +47,7 @@ var (
 	// parameter
 	masterURL  string
 	kubeconfig string
-	level      string
+	level      int64
 	// the logger KubeShare Scheduler
 	ksl *logrus.Logger
 )
@@ -56,9 +55,9 @@ var (
 func main() {
 	//klog.InitFlags(nil)
 	flag.Parse()
-	levelType, _ := strconv.ParseInt(level, 10, 64)
-	ksl = logger.New(levelType, KubeShareSchedulerLogPath)
 
+	ksl = logger.New(level, KubeShareSchedulerLogPath)
+	ksl.Info("The level of logger: ", level)
 	// set up signals so we handle the first shutdown signal gracefully
 	stopCh := signals.SetupSignalHandler()
 
@@ -88,7 +87,8 @@ func main() {
 	controller := kubesharecontroller.NewController(kubeClient, kubeshareClient,
 		kubeInformerFactory.Core().V1().Nodes(),
 		kubeInformerFactory.Core().V1().Pods(),
-		kubeshareInformerFactory.Sharedgpu().V1().SharePods())
+		kubeshareInformerFactory.Sharedgpu().V1().SharePods(),
+		ksl)
 
 	// notice that there is no need to run Start methods in a separate goroutine. (i.e. go kubeInformerFactory.Start(stopCh)
 	// Start method is non-blocking and runs all registered informers in a dedicated goroutine.
@@ -103,7 +103,7 @@ func main() {
 func init() {
 	flag.StringVar(&kubeconfig, "kubeconfig", "", "Path to a kubeconfig. Only required if out-of-cluster.")
 	flag.StringVar(&masterURL, "master", "", "The address of the Kubernetes API server. Overrides any value in kubeconfig. Only required if out-of-cluster.")
-	flag.StringVar(&level, "level", "The level of KubeShare Scheduler logger.")
+	flag.Int64Var(&level, "level", 2, "The level of KubeShare Scheduler logger.")
 }
 
 func checkCRD(kubeshareClientSet *clientset.Clientset) bool {

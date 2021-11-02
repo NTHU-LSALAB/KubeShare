@@ -26,7 +26,6 @@ import (
 	kubeinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/klog"
 
 	// Uncomment the following line to load the gcp plugin (only required to authenticate against GKE clusters).
 	// _ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
@@ -34,41 +33,52 @@ import (
 	clientset "KubeShare/pkg/client/clientset/versioned"
 	informers "KubeShare/pkg/client/informers/externalversions"
 	kubesharecontroller "KubeShare/pkg/devicemanager"
+	"KubeShare/pkg/logger"
 	"KubeShare/pkg/signals"
+
+	"github.com/sirupsen/logrus"
+)
+
+const (
+	// the file storing the kubeshare device manger log
+	KubeShareDeviceMangerLogPath = "kubeshare_device_manager.log"
 )
 
 var (
 	masterURL  string
 	kubeconfig string
 	threadNum  int
+	level      int64
+
+	ksl *logrus.Logger
 )
 
 func main() {
-	klog.InitFlags(nil)
 	flag.Parse()
-
+	ksl = logger.New(level, KubeShareDeviceMangerLogPath)
+	ksl.Info("The level of logger: ", level)
 	// set up signals so we handle the first shutdown signal gracefully
 	stopCh := signals.SetupSignalHandler()
 
 	cfg, err := clientcmd.BuildConfigFromFlags(masterURL, kubeconfig)
 	if err != nil {
-		klog.Fatalf("Error building kubeconfig: %s", err.Error())
+		ksl.Fatalf("Error building kubeconfig: %s", err.Error())
 	}
 	cfg.QPS = 1024.0
 	cfg.Burst = 1024
 
 	kubeClient, err := kubernetes.NewForConfig(cfg)
 	if err != nil {
-		klog.Fatalf("Error building kubernetes clientset: %s", err.Error())
+		ksl.Fatalf("Error building kubernetes clientset: %s", err.Error())
 	}
 
 	kubeshareClient, err := clientset.NewForConfig(cfg)
 	if err != nil {
-		klog.Fatalf("Error building example clientset: %s", err.Error())
+		ksl.Fatalf("Error building example clientset: %s", err.Error())
 	}
 
 	if !checkCRD(kubeshareClient) {
-		klog.Error("CRD doesn't exist. Exiting")
+		ksl.Error("CRD doesn't exist. Exiting")
 		os.Exit(1)
 	}
 
@@ -77,7 +87,8 @@ func main() {
 
 	controller := kubesharecontroller.NewController(kubeClient, kubeshareClient,
 		kubeInformerFactory.Core().V1().Pods(),
-		kubeshareInformerFactory.Sharedgpu().V1().SharePods())
+		kubeshareInformerFactory.Sharedgpu().V1().SharePods(),
+		ksl)
 
 	// notice that there is no need to run Start methods in a separate goroutine. (i.e. go kubeInformerFactory.Start(stopCh)
 	// Start method is non-blocking and runs all registered informers in a dedicated goroutine.
@@ -85,7 +96,7 @@ func main() {
 	kubeshareInformerFactory.Start(stopCh)
 
 	if err = controller.Run(threadNum, stopCh); err != nil {
-		klog.Fatalf("Error running controller: %s", err.Error())
+		ksl.Fatalf("Error running controller: %s", err.Error())
 	}
 }
 
@@ -93,12 +104,13 @@ func init() {
 	flag.StringVar(&kubeconfig, "kubeconfig", "", "Path to a kubeconfig. Only required if out-of-cluster.")
 	flag.StringVar(&masterURL, "master", "", "The address of the Kubernetes API server. Overrides any value in kubeconfig. Only required if out-of-cluster.")
 	flag.IntVar(&threadNum, "threadness", 1, "The number of worker threads.")
+	flag.Int64Var(&level, "level", 2, "The level of KubeShare Device Manger log.")
 }
 
 func checkCRD(kubeshareClientSet *clientset.Clientset) bool {
 	_, err := kubeshareClientSet.SharedgpuV1().SharePods("").List(metav1.ListOptions{})
 	if err != nil {
-		klog.Error(err)
+		ksl.Error(err)
 		if _, ok := err.(*errors.StatusError); ok {
 			if errors.IsNotFound(err) {
 				return false

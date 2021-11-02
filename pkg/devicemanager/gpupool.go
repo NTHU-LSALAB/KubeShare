@@ -13,7 +13,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/klog"
 
 	sharedgpuv1 "KubeShare/pkg/apis/sharedgpu/v1"
 	"KubeShare/pkg/lib/bitmap"
@@ -65,13 +64,13 @@ func (c *Controller) initNodesInfo() error {
 	dummyPodsLabel := labels.SelectorFromSet(labels.Set{sharedgpuv1.KubeShareRole: "dummyPod"})
 	if pods, err = c.podsLister.Pods("kube-system").List(dummyPodsLabel); err != nil {
 		errrr := fmt.Errorf("Error when list Pods: %s", err)
-		klog.Error(errrr)
+		ksl.Error(errrr)
 		return errrr
 	}
 	// find the sharePod
 	if sharepods, err = c.sharepodsLister.List(labels.Everything()); err != nil {
 		errrr := fmt.Errorf("Error when list SharePods: %s", err)
-		klog.Error(errrr)
+		ksl.Error(errrr)
 		return errrr
 	}
 
@@ -84,7 +83,7 @@ func (c *Controller) initNodesInfo() error {
 		// get the GPUID from the dummy pod
 		GPUID := ""
 		if gpuid, ok := pod.ObjectMeta.Labels[sharedgpuv1.KubeShareResourceGPUID]; !ok {
-			klog.Errorf("Error dummy Pod annotation: %s/%s", pod.ObjectMeta.Namespace, pod.ObjectMeta.Name)
+			ksl.Errorf("Error dummy Pod annotation: %s/%s", pod.ObjectMeta.Namespace, pod.ObjectMeta.Name)
 			continue
 		} else {
 			GPUID = gpuid
@@ -109,7 +108,7 @@ func (c *Controller) initNodesInfo() error {
 		} else {
 			_, ok := node.GPUID2GPU[GPUID]
 			if ok {
-				klog.Errorf("Duplicated GPUID '%s' on node '%s'", GPUID, pod.Spec.NodeName)
+				ksl.Errorf("Duplicated GPUID '%s' on node '%s'", GPUID, pod.Spec.NodeName)
 				continue
 			}
 			node.GPUID2GPU[GPUID] = &GPUInfo{
@@ -162,12 +161,12 @@ func (c *Controller) initNodesInfo() error {
 
 		node, ok := nodesInfo[sharepod.Spec.NodeName]
 		if !ok {
-			klog.Errorf("SharePod '%s/%s' doesn't have corresponding dummy Pod!", sharepod.ObjectMeta.Namespace, sharepod.ObjectMeta.Name)
+			ksl.Errorf("SharePod '%s/%s' doesn't have corresponding dummy Pod!", sharepod.ObjectMeta.Namespace, sharepod.ObjectMeta.Name)
 			continue
 		}
 		gpu, ok := node.GPUID2GPU[GPUID]
 		if !ok {
-			klog.Errorf("SharePod '%s/%s' doesn't have corresponding dummy Pod!", sharepod.ObjectMeta.Namespace, sharepod.ObjectMeta.Name)
+			ksl.Errorf("SharePod '%s/%s' doesn't have corresponding dummy Pod!", sharepod.ObjectMeta.Namespace, sharepod.ObjectMeta.Name)
 			continue
 		}
 
@@ -252,7 +251,7 @@ func (c *Controller) getPhysicalGPUuuid(nodeName string, GPUID string, gpu_reque
 	node, ok := nodesInfo[nodeName]
 	if !ok {
 		msg := fmt.Sprintf("No client node: %s", nodeName)
-		klog.Errorf(msg)
+		ksl.Errorf(msg)
 		return "", 255
 	}
 
@@ -265,11 +264,11 @@ func (c *Controller) getPhysicalGPUuuid(nodeName string, GPUID string, gpu_reque
 		}
 		tmp := node.PodManagerPortBitmap.FindNextFromCurrentAndSet() + PodManagerPortStart
 		if tmp == -1 {
-			klog.Errorf("Pod manager port pool is full!!!!!")
+			ksl.Errorf("Pod manager port pool is full!!!!!")
 			return "", 3
 		}
 		if tmp == 0 {
-			klog.Errorf("Pod manager error: Port 0")
+			ksl.Errorf("Pod manager error: Port 0")
 			return "", 255
 		}
 		*port = tmp
@@ -286,7 +285,7 @@ func (c *Controller) getPhysicalGPUuuid(nodeName string, GPUID string, gpu_reque
 	} else {
 		if podreq, isFound := FindInQueue(key, gpu.PodList); !isFound {
 			if tmp := gpu.Usage + gpu_request; tmp > 1.0 {
-				klog.Infof("Resource exceed, usage: %f, new_req: %f", gpu.Usage, gpu_request)
+				ksl.Infof("Resource exceed, usage: %f, new_req: %f", gpu.Usage, gpu_request)
 				return "", 2
 			} else {
 				gpu.Usage = tmp
@@ -294,11 +293,11 @@ func (c *Controller) getPhysicalGPUuuid(nodeName string, GPUID string, gpu_reque
 			gpu.Mem += gpu_mem
 			tmp := node.PodManagerPortBitmap.FindNextFromCurrentAndSet() + PodManagerPortStart
 			if tmp == -1 {
-				klog.Errorf("Pod manager port pool is full!!!!!")
+				ksl.Errorf("Pod manager port pool is full!!!!!")
 				return "", 3
 			}
 			if tmp == 0 {
-				klog.Errorf("Pod manager error: Port 0")
+				ksl.Errorf("Pod manager error: Port 0")
 				return "", 4
 			}
 			*port = tmp
@@ -327,7 +326,7 @@ func (c *Controller) createDummyPod(nodeName string, GPUID string) error {
 	podName := fmt.Sprintf("%s-%s-%s", sharedgpuv1.KubeShareDummyPodName, nodeName, GPUID)
 
 	createit := func() error {
-		klog.Infof("ERICYEH: creating dummy pod: %s", podName)
+		ksl.Debugf("Creating dummy pod: %s", podName)
 		// create a pod for dummy gpu then waiting for running, and get its gpu deviceID
 		createdPod, err := c.kubeclientset.CoreV1().Pods("kube-system").Create(&corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
@@ -358,7 +357,7 @@ func (c *Controller) createDummyPod(nodeName string, GPUID string) error {
 		if err != nil {
 			_, exists := c.kubeclientset.CoreV1().Pods("kube-system").Get(podName, metav1.GetOptions{})
 			if exists != nil {
-				klog.Errorf("Error when creating dummy pod: \nerror: '%s',\n podspec: %-v", err, createdPod)
+				ksl.Errorf("Error when creating dummy pod: \nerror: '%s',\n podspec: %-v", err, createdPod)
 				return err
 			}
 		}
@@ -376,13 +375,13 @@ func (c *Controller) createDummyPod(nodeName string, GPUID string) error {
 			}
 		} else {
 			msg := fmt.Sprintf("List Pods resource error! nodeName: %s", nodeName)
-			klog.Errorf(msg)
+			ksl.Errorf(msg)
 			return err
 		}
 	} else {
 		if dummypod.ObjectMeta.DeletionTimestamp != nil {
 			// TODO: If Dummy Pod had been deleted, re-create it later
-			klog.Warningf("Unhandled: Dummy Pod %s is deleting! re-create it later!", podName)
+			ksl.Warningf("Unhandled: Dummy Pod %s is deleting! re-create it later!", podName)
 		}
 		if dummypod.Status.Phase == corev1.PodRunning || dummypod.Status.Phase == corev1.PodFailed {
 			c.getAndSetUUIDFromDummyPod(nodeName, GPUID, podName, dummypod)
@@ -400,7 +399,7 @@ func (c *Controller) getAndSetUUIDFromDummyPod(nodeName, GPUID, podName string, 
 		time.Sleep(time.Second)
 		c.createDummyPod(nodeName, GPUID)
 		err := fmt.Errorf("Dummy Pod '%s' status failed, restart it.", podName)
-		klog.Errorf(err.Error())
+		ksl.Errorf(err.Error())
 		return err
 	}
 	// dummyPod.Status.Phase must be Running
@@ -408,11 +407,11 @@ func (c *Controller) getAndSetUUIDFromDummyPod(nodeName, GPUID, podName string, 
 	rawlog, logerr := c.kubeclientset.CoreV1().Pods("kube-system").GetLogs(podName, &corev1.PodLogOptions{}).Do().Raw()
 	if logerr != nil {
 		err := fmt.Errorf("Error when get dummy pod's log! pod namespace/name: %s/%s, error: %s", "kube-system", podName, logerr)
-		klog.Errorf(err.Error())
+		ksl.Errorf(err.Error())
 		return err
 	}
 	uuid = strings.Trim(string(rawlog), " \n\t")
-	klog.Infof("Dummy Pod %s get device ID: '%s'", podName, uuid)
+	ksl.Infof("Dummy Pod %s get device ID: '%s'", podName, uuid)
 	isFound := false
 	for id := range nodesInfo[nodeName].UUID2Port {
 		if id == uuid {
@@ -422,7 +421,7 @@ func (c *Controller) getAndSetUUIDFromDummyPod(nodeName, GPUID, podName string, 
 
 	if !isFound {
 		err := fmt.Errorf("Cannot find UUID '%s' from dummy Pod: '%s' in UUID database.", uuid, podName)
-		klog.Errorf(err.Error())
+		ksl.Errorf(err.Error())
 		// possibly not print UUID yet, try again
 		time.Sleep(time.Second)
 		go c.createDummyPod(nodeName, GPUID)
@@ -435,9 +434,9 @@ func (c *Controller) getAndSetUUIDFromDummyPod(nodeName, GPUID, podName string, 
 	nodesInfo[nodeName].GPUID2GPU[GPUID].UUID = uuid
 
 	PodList := nodesInfo[nodeName].GPUID2GPU[GPUID].PodList
-	klog.Infof("After dummy Pod created, PodList Len: %d", PodList.Len())
+	ksl.Infof("After dummy Pod created, PodList Len: %d", PodList.Len())
 	for k := PodList.Front(); k != nil; k = k.Next() {
-		klog.Infof("Add MtgpuPod back to queue then process: %s", k.Value)
+		ksl.Infof("Add MtgpuPod back to queue then process: %s", k.Value)
 		c.workqueue.Add(k.Value.(*PodRequest).Key)
 	}
 
@@ -457,7 +456,7 @@ func (c *Controller) removeSharePodFromList(sharepod *sharedgpuv1.SharePod) {
 			for pod := podlist.Front(); pod != nil; pod = pod.Next() {
 				podRequest := pod.Value.(*PodRequest)
 				if podRequest.Key == key {
-					klog.Infof("Remove MtgpuPod %s from list, remaining %d MtgpuPod(s).", key, podlist.Len())
+					ksl.Infof("Remove MtgpuPod %s from list, remaining %d MtgpuPod(s).", key, podlist.Len())
 					podlist.Remove(pod)
 
 					uuid := gpu.UUID
@@ -488,7 +487,7 @@ func (c *Controller) removeSharePodFromList(sharepod *sharedgpuv1.SharePod) {
 
 func (c *Controller) deleteDummyPod(nodeName, GPUID, uuid string) {
 	key := fmt.Sprintf("%s-%s-%s", sharedgpuv1.KubeShareDummyPodName, nodeName, GPUID)
-	klog.Infof("Deleting dummy Pod: %s", key)
+	ksl.Infof("Deleting dummy Pod: %s", key)
 	c.kubeclientset.CoreV1().Pods("kube-system").Delete(key, &metav1.DeleteOptions{})
 	syncConfig(nodeName, uuid, nil)
 }
