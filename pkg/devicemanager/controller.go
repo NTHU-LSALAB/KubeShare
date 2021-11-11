@@ -57,6 +57,7 @@ const (
 	KubeShareLibraryPath = "/kubeshare/library"
 	SchedulerIpPath      = KubeShareLibraryPath + "/schedulerIP.txt"
 	PodManagerPortStart  = 50050
+	KubeShareLogPath     = "/kubeshare/log"
 )
 
 var (
@@ -581,6 +582,10 @@ func newPod(sharepod *sharedgpuv1.SharePod, isGPUPod bool, podManagerIP string, 
 					Name:      "kubeshare-lib",
 					MountPath: KubeShareLibraryPath,
 				},
+				corev1.VolumeMount{
+					Name:      "kubeshare-log",
+					MountPath: KubeShareLogPath,
+				},
 			)
 		}
 		specCopy.Volumes = append(specCopy.Volumes,
@@ -589,6 +594,14 @@ func newPod(sharepod *sharedgpuv1.SharePod, isGPUPod bool, podManagerIP string, 
 				VolumeSource: corev1.VolumeSource{
 					HostPath: &corev1.HostPathVolumeSource{
 						Path: KubeShareLibraryPath,
+					},
+				},
+			},
+			corev1.Volume{
+				Name: "kubeshare-log",
+				VolumeSource: corev1.VolumeSource{
+					HostPath: &corev1.HostPathVolumeSource{
+						Path: KubeShareLogPath,
 					},
 				},
 			},
