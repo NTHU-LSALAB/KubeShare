@@ -27,7 +27,8 @@ def launch_scheduler():
     cmd = "{} -p {} -f {} -P {} -q {} -m {} -w {}".format(
         args.schd, cfg_h, cfg_t, args.port, args.base_quota, args.min_quota, args.window
     )
-    proc = sp.Popen(shlex.split(cmd), universal_newlines=True, bufsize=1)
+    with open("/kubeshare/log/gemini-scheduler.log","a") as err:
+        proc = sp.Popen(shlex.split(cmd), universal_newlines=True, bufsize=1, stderr = err)
     return proc
 
 def update_podmanager(file):
@@ -44,11 +45,13 @@ def update_podmanager(file):
         if name_port not in podlist:
             sys.stderr.write("[launcher] pod manager id '{}' port '{}' start running\n".format(name_port, port))
             sys.stderr.flush()
-            proc = sp.Popen(
-                shlex.split(args.pmgr),
-                env=prepare_env(name, port, args.port),
-                preexec_fn=os.setpgrp,
-            )
+            with open("/kubeshare/log/pod-manager.log","a") as err:
+                proc = sp.Popen(
+                    shlex.split(args.pmgr),
+                    env=prepare_env(name, port, args.port),
+                    preexec_fn=os.setpgrp,
+                    stderr=err
+                )
             podlist[name_port] = [True, proc]
         else:
             podlist[name_port][0] = True
