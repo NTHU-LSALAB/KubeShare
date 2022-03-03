@@ -58,14 +58,19 @@ func ScheduleAlgorithmBestFit(isGPUPod bool, gpu_request float64, gpu_mem int64,
 
 	var wait sync.WaitGroup
 
-	scheduleNode := func(nodeName string, nodeRes *NodeResource, gpu_mem_set bool) {
+	scheduleNode := func(nodeName string,
+		nodeRes *NodeResource,
+		gpu_request_millivalue int64,
+		gpu_request float64,
+		gpu_mem int64,
+		gpu_mem_set bool) {
 
 		if !gpu_mem_set {
 			totalGpuMem := nodeRes.GpuMemTotal
 			gpu_mem = int64(math.Ceil(gpu_request * (float64)(totalGpuMem)))
 			ksl.Debug("Judge-gpu request: ", gpu_request)
+			ksl.Debug("Judge-total gpu mem: ", (totalGpuMem))
 			ksl.Debug("Judge-gpu mem: ", gpu_mem)
-			ksl.Debug("Judge-total gpu mem: ", (float64)(totalGpuMem))
 		}
 
 		if nodeRes.CpuFree < cpuReqTotal || nodeRes.MemFree < memReqTotal {
@@ -83,6 +88,7 @@ func ScheduleAlgorithmBestFit(isGPUPod bool, gpu_request float64, gpu_mem int64,
 			}
 			if !findTheHole {
 				if nodeRes.GpuFreeCount > 0 {
+					ksl.Debugf("New GPUID, gpu mem: %v", gpu_mem)
 					tryBestNode(1000-gpu_request_millivalue, nodeName, sharedgpuv1.NewGPUID(5), gpu_mem)
 				}
 			}
@@ -98,9 +104,10 @@ func ScheduleAlgorithmBestFit(isGPUPod bool, gpu_request float64, gpu_mem int64,
 
 	wait.Add(len(nodeResources))
 	for nodeName, nodeRes := range nodeResources {
-		go scheduleNode(nodeName, nodeRes, gpu_mem_set)
+		go scheduleNode(nodeName, nodeRes, gpu_request_millivalue, gpu_request, gpu_mem, gpu_mem_set)
 	}
 	wait.Wait()
 
+	ksl.Debugf("best Point: %v; Node: %v; GPUID: %v, GPUMem: %v, ", bestNode.Point, bestNode.NodeName, bestNode.GPUID, bestNode.podGPUMem)
 	return bestNode.NodeName, bestNode.GPUID, bestNode.podGPUMem
 }
