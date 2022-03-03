@@ -57,7 +57,7 @@ spec:
       serviceAccountName: kubeshare-scheduler
       containers:
         - name: kubeshare-scheduler
-          image: riyazhu/kubeshare-scheduler:test #20210706124950 
+          image: riyazhu/kubeshare-scheduler:testv1 #20210706124950 
           imagePullPolicy: Always
           command: ["kubeshare-scheduler"]
           args:
