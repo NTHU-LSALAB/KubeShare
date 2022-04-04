@@ -1,10 +1,10 @@
 CONTAINER_PREFIX?=riyazhu
-CONTAINER_NAME?=kubeshare-scheduler
-CONTAINER_VERSION?=testv1
+CONTAINER_NAME?=kubeshare-collector
+CONTAINER_VERSION?=db
 CONTAINER_IMAGE=$(CONTAINER_PREFIX)/$(CONTAINER_NAME):$(CONTAINER_VERSION)
 
 
-TARGET=kubeshare-scheduler kubeshare-device-manager kubeshare-config-client
+TARGET=kubeshare-scheduler kubeshare-collector kubeshare-aggregator
 GO=go
 GO_MODULE=GO111MODULE=on
 BIN_DIR=bin/
@@ -16,12 +16,15 @@ PACKAGE_PREFIX=KubeShare/cmd/
 
 all: $(TARGET)
 
-kubeshare-device-manager:
-	$(GO_MODULE) $(ALPINE_COMPILE_FLAGS) $(GO) build -o $(BIN_DIR)$@ $(PACKAGE_PREFIX)$@
+kubeshare-collector:
+	$(GO_MODULE) $(NVML_COMPILE_FLAGS) $(GO) build -o $(BIN_DIR)$@ $(PACKAGE_PREFIX)$@
 
 kubeshare-scheduler:
 	$(GO_MODULE) $(ALPINE_COMPILE_FLAGS) $(GO) build -o $(BIN_DIR)$@ $(PACKAGE_PREFIX)$@
 
+kubeshare-aggregator:
+	$(GO_MODULE) $(ALPINE_COMPILE_FLAGS) $(GO) build -o $(BIN_DIR)$@ $(PACKAGE_PREFIX)$@
+	
 kubeshare-config-client:
 	$(GO_MODULE) $(NVML_COMPILE_FLAGS) $(GO) build -o $(BIN_DIR)$@ $(PACKAGE_PREFIX)$@
 

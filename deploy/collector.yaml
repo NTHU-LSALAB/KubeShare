@@ -1,0 +1,93 @@
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: kube-system
+  name: kubeshare-collector
+  labels:
+    app: kubeshare-collector
+spec:
+  sessionAffinity: ClientIP
+  selector:
+    app: kubeshare-collector
+  ports:
+  - name: collector
+    port: 9004
+    targetPort: 9004
+    protocol: TCP
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  labels:
+    app: kubeshare-collector
+  name: kubeshare-collector
+  namespace: monitoring
+spec:
+  endpoints:
+  - interval: 10s
+    port: collector
+    path: /kubeshare-collector
+  jobLabel: app
+  namespaceSelector:
+    matchNames:
+    - kube-system
+  selector:
+    matchLabels:
+      app: kubeshare-collector
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: kubeshare-collector
+  namespace: kube-system
+  labels:
+    app: kubeshare-collector
+spec:
+  selector:
+    matchLabels:
+      app: kubeshare-collector
+  template:
+    metadata:
+      labels:
+        app: kubeshare-collector
+    spec:
+      nodeSelector:
+        SharedGPU: "true"
+      initContainers:
+      - name: enable-accounting-mode
+        image: ubuntu
+        command:
+        - nvidia-smi
+        - -am
+        - "1"
+        env:
+        - name: NVIDIA_VISIBLE_DEVICES
+          value: all
+        securityContext:
+          privileged: true
+      containers:
+      - name: kubeshare-collector
+        image: riyazhu/kubeshare-collector:db
+        command: ["kubeshare-collector"]
+        args:
+          - --level=3
+        ports:
+          - name: collector
+            containerPort: 9004
+            protocol: TCP
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        imagePullPolicy: Always
+        volumeMounts:
+        - name: "kubeshare-log"
+          mountPath: "/kubeshare/log" 
+      volumes:
+      - name: "kubeshare-log"
+        hostPath:
+          path: "/kubeshare/log"
+
+
+
