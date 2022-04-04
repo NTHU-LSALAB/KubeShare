@@ -16,6 +16,9 @@ import (
 )
 
 var (
+	// prometheus
+	prometheusURL = flag.String("prometheusURL", "", "The address of the prometheus")
+
 	// kubernetes
 	masterURL  = flag.String("master", "", "The address of the kubernetes API server. Overrides any value in kubeconfig. Only required if out-of-cluster.")
 	kubeConfig = flag.String("kubeconfig", "", "Path to a kubeconfig. Only requried if out-of-cluster.")
@@ -47,15 +50,10 @@ func main() {
 		ksl.Fatalf("Error building kubernetes clientset: %s", err.Error())
 	}
 
-
-	config.NewConfig(ksl, clientset, , stopCh)
 	// Informers are a combination of this event interface and an in-memory cache with indexed lookup.
 	// NewSharedInformerFactory caches all objects of a resource in all namespaces in the store
 	informerFactory := informers.NewSharedInformerFactory(clientset, time.Second*30)
 
-	podInformer := informerFactory.Core().V1().Pods().Informer()
-	podInformer.AddEventHandler()
-
-	
+	config.NewConfig(ksl, clientset, prometheusURL, informerFactory.Core().V1().Pods(), stopCh)
 
 }

@@ -21,22 +21,24 @@ var (
 )
 
 type Config struct {
-	ksl       *logrus.Logger
-	clientset kubernetes.Interface
-	podLister corev1lister.PodLister
+	ksl           *logrus.Logger
+	clientset     kubernetes.Interface
+	podLister     corev1lister.PodLister
+	prometheusURL *string
 }
 
-func NewConfig(ksl *logrus.Logger, clientset kubernetes.Interface, podInformer corev1informer.PodInformer, stopCh <-chan struct{}) *Config {
+func NewConfig(ksl *logrus.Logger, clientset kubernetes.Interface, prometheusURL *string, podInformer corev1informer.PodInformer, stopCh <-chan struct{}) *Config {
 	config := &Config{
-		ksl:       ksl,
-		clientset: clientset,
-		podLister: podInformer.Lister(),
+		ksl:           ksl,
+		clientset:     clientset,
+		prometheusURL: prometheusURL,
+		podLister:     podInformer.Lister(),
 	}
 
 	pInformer := podInformer.Informer()
 	pInformer.AddEventHandler(
 		cache.FilteringResourceEventHandler{
-			FilterFunc: filterPod,
+			FilterFunc: config.filterPod,
 			Handler: cache.ResourceEventHandlerFuncs{
 				UpdateFunc: func(old, new interface{}) {
 
@@ -53,7 +55,7 @@ func NewConfig(ksl *logrus.Logger, clientset kubernetes.Interface, podInformer c
 	return config
 }
 
-func filterPod(obj interface{}) bool {
+func (c *Config) filterPod(obj interface{}) bool {
 	switch t := obj.(type) {
 	case *corev1.Pod:
 		return c.checkSharedPod(obj.(*corev1.Pod))
@@ -81,4 +83,8 @@ func (c *Config) checkSharedPod(pod *corev1.Pod) bool {
 		}
 	}
 	return false
+}
+
+func query() {
+
 }

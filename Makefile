@@ -4,7 +4,7 @@ CONTAINER_VERSION?=db
 CONTAINER_IMAGE=$(CONTAINER_PREFIX)/$(CONTAINER_NAME):$(CONTAINER_VERSION)
 
 
-TARGET=kubeshare-scheduler kubeshare-collector kubeshare-aggregator
+TARGET=kubeshare-scheduler kubeshare-collector kubeshare-aggregator kubeshare-config
 GO=go
 GO_MODULE=GO111MODULE=on
 BIN_DIR=bin/
@@ -25,7 +25,7 @@ kubeshare-scheduler:
 kubeshare-aggregator:
 	$(GO_MODULE) $(ALPINE_COMPILE_FLAGS) $(GO) build -o $(BIN_DIR)$@ $(PACKAGE_PREFIX)$@
 	
-kubeshare-config-client:
+kubeshare-config:
 	$(GO_MODULE) $(NVML_COMPILE_FLAGS) $(GO) build -o $(BIN_DIR)$@ $(PACKAGE_PREFIX)$@
 
 
