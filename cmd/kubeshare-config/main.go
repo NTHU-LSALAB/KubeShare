@@ -71,4 +71,6 @@ func main() {
 
 	config.NewConfig(ksl, promeAPI, clientset, informerFactory.Core().V1().Pods(), stopCh)
 
+	<-stopCh
+	ksl.Info("Shutting down config")
 }

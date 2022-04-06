@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/prometheus/common/model"
@@ -30,7 +31,7 @@ func (c *Config) queryDecision() []model.LabelSet {
 	if len(warnings) > 0 {
 		c.ksl.Warnf("Warnings: %v\n", warnings)
 	}
-	c.ksl.Printf("success")
+
 	return result
 }
 
@@ -38,27 +39,24 @@ func (c *Config) queryDecision() []model.LabelSet {
 // -> key: uuid ; value: all pod request
 // podMangerPortConfig
 // ->  key: uuid ; value: all pod manager port
-func (c *Config) convertData(result []model.LabelSet) (gpuConfig, podMangerPortConfig map[string][]string) {
+func (c *Config) convertData(result []model.LabelSet) (map[string][]string, map[string][]string) {
 
+	gpuConfig, podMangerPortConfig := map[string][]string{}, map[string][]string{}
 	for _, res := range result {
-		uuid := string(res["uuid"])
+		uuid := strings.ReplaceAll(string(res["uuid"]), ",", "")
 
-		namespace := res["namespace"]
-		name := res["pod"]
+		namespace := res["exported_namespace"]
+		name := res["exported_pod"]
 
 		gpuData := fmt.Sprintf("%v/%v %v %v %v\n", namespace, name, res["limit"], res["request"], res["memory"])
 		portData := fmt.Sprintf("%v/%v %v\n", namespace, name, res["port"])
-		c.ksl.Printf("TEST before")
-		if gpuConfig[uuid] == nil {
-			gpuConfig[uuid] = make([]string, 0)
-			podMangerPortConfig[uuid] = make([]string, 0)
-		}
+
 		gpuConfig[uuid] = append(gpuConfig[uuid], gpuData)
 		podMangerPortConfig[uuid] = append(podMangerPortConfig[uuid], portData)
-		c.ksl.Printf("TEST after")
+
 	}
 
-	return
+	return gpuConfig, podMangerPortConfig
 }
 
 // gpuConfigFile is named by UUID of GPU

@@ -59,9 +59,17 @@ func NewConfig(ksl *logrus.Logger, promeAPI promeV1.API, clientset kubernetes.In
 		cache.FilteringResourceEventHandler{
 			FilterFunc: config.filterPod,
 			Handler: cache.ResourceEventHandlerFuncs{
+				// AddFunc: func(obj interface{}) {
+				// 	gpuConfig, podMangerPortConfig := config.convertData(config.queryDecision())
+				// 	config.writeFile(gpuConfig, podMangerPortConfig)
+				// 	pod := obj.(*corev1.Pod)
+				// 	ksl.Infof("add: %v/%v", pod.Namespace, pod.Name)
+				// },
 				UpdateFunc: func(old, new interface{}) {
 					gpuConfig, podMangerPortConfig := config.convertData(config.queryDecision())
 					config.writeFile(gpuConfig, podMangerPortConfig)
+					pod := new.(*corev1.Pod)
+					ksl.Infof("update: %v/%v", pod.Namespace, pod.Name)
 				},
 			},
 		})
