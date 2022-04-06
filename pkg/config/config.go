@@ -17,7 +17,6 @@ import (
 )
 
 const (
-	GPU_REQUIREMENT                = "gpu_requirement"
 	schedulerGPUConfigPath         = "/kubeshare/scheduler/config/"
 	schedulerGPUPodManagerPortPath = "/kubeshare/scheduler/podmanagerport/"
 )
@@ -27,6 +26,8 @@ var (
 
 	// the upper limit percentage of time over the past sample period that one or more kernels of the pod are executed on the GPU
 	KubeShareResourceGPULimit = domain + "gpu_limit"
+
+	nodeName string
 )
 
 type Config struct {
@@ -38,10 +39,6 @@ type Config struct {
 
 func NewConfig(ksl *logrus.Logger, promeAPI promeV1.API, clientset kubernetes.Interface, podInformer corev1informer.PodInformer, stopCh <-chan struct{}) *Config {
 
-	// create the configuration directories
-	os.MkdirAll(schedulerGPUConfigPath, os.ModePerm)
-	os.MkdirAll(schedulerGPUPodManagerPortPath, os.ModePerm)
-
 	config := &Config{
 		ksl:       ksl,
 		promeAPI:  promeAPI,
@@ -49,13 +46,22 @@ func NewConfig(ksl *logrus.Logger, promeAPI promeV1.API, clientset kubernetes.In
 		podLister: podInformer.Lister(),
 	}
 
+	// get the node name of this pod
+	nodeName = os.Getenv("NODE_NAME")
+	ksl.Printf("Node: %v", nodeName)
+
+	// create the configuration directories
+	os.MkdirAll(schedulerGPUConfigPath, os.ModePerm)
+	os.MkdirAll(schedulerGPUPodManagerPortPath, os.ModePerm)
+
 	pInformer := podInformer.Informer()
 	pInformer.AddEventHandler(
 		cache.FilteringResourceEventHandler{
 			FilterFunc: config.filterPod,
 			Handler: cache.ResourceEventHandlerFuncs{
 				UpdateFunc: func(old, new interface{}) {
-					config.query()
+					gpuConfig, podMangerPortConfig := config.convertData(config.queryDecision())
+					config.writeFile(gpuConfig, podMangerPortConfig)
 				},
 			},
 		})
@@ -84,17 +90,22 @@ func (c *Config) filterPod(obj interface{}) bool {
 }
 
 func (c *Config) checkSharedPod(pod *corev1.Pod) bool {
-	limit := "0"
-	limit = pod.Labels[KubeShareResourceGPULimit]
 
-	if limit != "0" {
-		floatLimit, err := strconv.ParseFloat(limit, 64)
-		if err != nil {
-			c.ksl.Errorf("limit converts error")
-		}
-		if floatLimit <= 1.0 {
-			return true
-		}
+	limit, ok := pod.Labels[KubeShareResourceGPULimit]
+
+	if !ok {
+		return false
 	}
+
+	floatLimit, err := strconv.ParseFloat(limit, 64)
+	if err != nil {
+		c.ksl.Errorf("limit converts error")
+		return false
+	}
+	if floatLimit <= 1.0 {
+		c.ksl.Infof("Get the gpu limit(<= 1.0) of pod: %v/%v, need to process", pod.Namespace, pod.Name)
+		return true
+	}
+
 	return false
 }

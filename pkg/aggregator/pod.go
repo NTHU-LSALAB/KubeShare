@@ -2,6 +2,7 @@ package aggregator
 
 import (
 	"context"
+	"fmt"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -66,24 +67,36 @@ func (a *Aggregator) getPods() []*PodInfo {
 
 func processPod(pod *v1.Pod) *PodInfo {
 
-	limit := "0"
-	limit = pod.Labels[KubeShareResourceGPULimit]
+	limit, ok := pod.Labels[KubeShareResourceGPULimit]
 
-	if limit == "0" {
+	if !ok {
+		limit = "0.0"
 		return nil
 	}
 
-	groupName := ""
-	groupName = pod.Labels[PodGroupName]
+	namespace := pod.ObjectMeta.Namespace
+	name := pod.ObjectMeta.Name
+	key := fmt.Sprintf("%v/%v", namespace, name)
 
-	minAvailable := "0"
-	minAvailable = pod.Labels[PodGroupMinAvailable]
+	groupName, ok := pod.Labels[PodGroupName]
+	if !ok {
+		groupName = key
+	}
 
-	request := "0"
-	request = pod.Labels[KubeShareResourceGPURequest]
+	minAvailable, ok := pod.Labels[PodGroupMinAvailable]
+	if !ok {
+		minAvailable = "1"
+	}
 
-	memory := "0"
-	memory = pod.Labels[KubeShareResourceGPUMemory]
+	request, ok := pod.Labels[KubeShareResourceGPURequest]
+	if !ok {
+		request = "0.0"
+	}
+
+	memory, ok := pod.Labels[KubeShareResourceGPUMemory]
+	if !ok {
+		memory = "0"
+	}
 
 	uuid, port := getGPUUUIDPort(pod)
 

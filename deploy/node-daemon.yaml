@@ -1,19 +1,49 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kubeshare-config
+  namespace: kube-system
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: kubeshare-config
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "watch", "list"]
+---
+
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: kubeshare-config
+subjects:
+- kind: ServiceAccount
+  name: kubeshare-config
+  namespace: kube-system
+roleRef:
+  kind: ClusterRole
+  name: kubeshare-config
+  apiGroup: rbac.authorization.k8s.io
+---
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
   name: kubeshare-node-daemon
   namespace: kube-system
   labels:
-    kubeshare: kubeshare-node-daemon
+    app: kubeshare-node-daemon
 spec:
   selector:
     matchLabels:
-      kubeshare: kubeshare-node-daemon
+      app: kubeshare-node-daemon
   template:
     metadata:
       labels:
-        kubeshare: kubeshare-node-daemon
+        app: kubeshare-node-daemon
     spec:
+      serviceAccountName: kubeshare-config
       nodeSelector:
         SharedGPU: "true"
       terminationGracePeriodSeconds: 0
@@ -33,25 +63,23 @@ spec:
         - name: "kubeshare-log"
           mountPath: "/kubeshare/log"
       containers:
-      - name: config-client
-        image: riyazhu/kubeshare-config-client:test #20210706124950
+      - name: config
+        image: riyazhu/kubeshare-config:db #20210706124950
         imagePullPolicy: Always
         env:
-        - name: KUBESHARE_SCHEDULER_IP
+        - name: NODE_NAME
           valueFrom:
             fieldRef:
-              fieldPath: status.podIP
-        command: ["kubeshare-config-client"]
+              fieldPath: spec.nodeName
+        command: ["kubeshare-config"]
         args:
           - --level=3
-          - --server-ip=kubeshare-device-manager.kube-system.svc:9797
+          - --prometheusURL=http://140.114.78.243:30093
         volumeMounts:
         - name: "kubeshare-scheduler"
           mountPath: "/kubeshare/scheduler"
         - name: "kubeshare-library"
           mountPath: "/kubeshare/library"
-        - name: "exporter"
-          mountPath: "/tmp"
         - name: "kubeshare-log"
           mountPath: "/kubeshare/log"
       - name: gemini-scheduler

@@ -1,5 +1,5 @@
 CONTAINER_PREFIX?=riyazhu
-CONTAINER_NAME?=kubeshare-collector
+CONTAINER_NAME?=kubeshare-config
 CONTAINER_VERSION?=db
 CONTAINER_IMAGE=$(CONTAINER_PREFIX)/$(CONTAINER_NAME):$(CONTAINER_VERSION)
 
@@ -26,7 +26,7 @@ kubeshare-aggregator:
 	$(GO_MODULE) $(ALPINE_COMPILE_FLAGS) $(GO) build -o $(BIN_DIR)$@ $(PACKAGE_PREFIX)$@
 	
 kubeshare-config:
-	$(GO_MODULE) $(NVML_COMPILE_FLAGS) $(GO) build -o $(BIN_DIR)$@ $(PACKAGE_PREFIX)$@
+	$(GO_MODULE) $(ALPINE_COMPILE_FLAGS) $(GO) build -o $(BIN_DIR)$@ $(PACKAGE_PREFIX)$@
 
 
 build-image:

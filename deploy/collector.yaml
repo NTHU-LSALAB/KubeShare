@@ -53,18 +53,6 @@ spec:
     spec:
       nodeSelector:
         SharedGPU: "true"
-      initContainers:
-      - name: enable-accounting-mode
-        image: ubuntu
-        command:
-        - nvidia-smi
-        - -am
-        - "1"
-        env:
-        - name: NVIDIA_VISIBLE_DEVICES
-          value: all
-        securityContext:
-          privileged: true
       containers:
       - name: kubeshare-collector
         image: riyazhu/kubeshare-collector:db

@@ -1,0 +1,126 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kubeshare-aggregator
+  namespace: kube-system
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: kubeshare-aggregator
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "watch", "list"]
+---
+
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: kubeshare-aggregator
+subjects:
+- kind: ServiceAccount
+  name: kubeshare-aggregator
+  namespace: kube-system
+roleRef:
+  kind: ClusterRole
+  name: kubeshare-aggregator
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: kube-system
+  name: kubeshare-aggregator
+  labels:
+    app: kubeshare-aggregator
+spec:
+  sessionAffinity: ClientIP
+  selector:
+    app: kubeshare-aggregator
+  ports:
+  - name: aggregator
+    port: 9005
+    targetPort: 9005
+    protocol: TCP
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  labels:
+    app: kubeshare-aggregator
+  name: kubeshare-aggregator
+  namespace: monitoring
+spec:
+  endpoints:
+  - interval: 5s
+    port: aggregator
+    path: /kubeshare-aggregator
+  jobLabel: app
+  namespaceSelector:
+    matchNames:
+    - kube-system
+  selector:
+    matchLabels:
+      app: kubeshare-aggregator
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kubeshare-aggregator
+  namespace: kube-system
+  annotations:
+    scheduler.alpha.kubernetes.io/critical-pod: ""
+  labels:
+    app: kubeshare-aggregator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kubeshare-aggregator
+  template:
+    metadata:
+      labels:
+        app: kubeshare-aggregator
+    spec:
+      serviceAccountName: kubeshare-aggregator
+      containers:
+        - name: kubeshare-aggregator
+          image: riyazhu/kubeshare-aggregator:db #20210706124950 
+          imagePullPolicy: Always
+          command: ["kubeshare-aggregator"]
+          args:
+            - --level=3
+          ports:
+          - name: aggregator
+            containerPort: 9005
+            protocol: TCP
+          volumeMounts:
+            - name: "kubeshare-log"
+              mountPath: "/kubeshare/log"
+          env:
+          - name: NODE_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: spec.nodeName
+      volumes:
+        - name: "kubeshare-log"
+          hostPath:
+            path: "/kubeshare/log"
+      priorityClassName: system-node-critical
+      tolerations:
+      - key: "CriticalAddonsOnly"
+        operator: "Exists"
+      - key: "node-role.kubernetes.io/master"
+        operator: "Exists"
+        effect: "NoSchedule"
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: "node-role.kubernetes.io/master"
+                operator: "Exists"
+
+
