@@ -1,6 +1,7 @@
 package config
 
 import (
+	"os"
 	"strconv"
 
 	"github.com/sirupsen/logrus"
@@ -11,6 +12,14 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	corev1informer "k8s.io/client-go/informers/core/v1"
 	corev1lister "k8s.io/client-go/listers/core/v1"
+
+	promeV1 "github.com/prometheus/client_golang/api/prometheus/v1"
+)
+
+const (
+	GPU_REQUIREMENT                = "gpu_requirement"
+	schedulerGPUConfigPath         = "/kubeshare/scheduler/config/"
+	schedulerGPUPodManagerPortPath = "/kubeshare/scheduler/podmanagerport/"
 )
 
 var (
@@ -21,18 +30,23 @@ var (
 )
 
 type Config struct {
-	ksl           *logrus.Logger
-	clientset     kubernetes.Interface
-	podLister     corev1lister.PodLister
-	prometheusURL *string
+	ksl       *logrus.Logger
+	promeAPI  promeV1.API
+	clientset kubernetes.Interface
+	podLister corev1lister.PodLister
 }
 
-func NewConfig(ksl *logrus.Logger, clientset kubernetes.Interface, prometheusURL *string, podInformer corev1informer.PodInformer, stopCh <-chan struct{}) *Config {
+func NewConfig(ksl *logrus.Logger, promeAPI promeV1.API, clientset kubernetes.Interface, podInformer corev1informer.PodInformer, stopCh <-chan struct{}) *Config {
+
+	// create the configuration directories
+	os.MkdirAll(schedulerGPUConfigPath, os.ModePerm)
+	os.MkdirAll(schedulerGPUPodManagerPortPath, os.ModePerm)
+
 	config := &Config{
-		ksl:           ksl,
-		clientset:     clientset,
-		prometheusURL: prometheusURL,
-		podLister:     podInformer.Lister(),
+		ksl:       ksl,
+		promeAPI:  promeAPI,
+		clientset: clientset,
+		podLister: podInformer.Lister(),
 	}
 
 	pInformer := podInformer.Informer()
@@ -41,7 +55,7 @@ func NewConfig(ksl *logrus.Logger, clientset kubernetes.Interface, prometheusURL
 			FilterFunc: config.filterPod,
 			Handler: cache.ResourceEventHandlerFuncs{
 				UpdateFunc: func(old, new interface{}) {
-
+					config.query()
 				},
 			},
 		})
@@ -83,8 +97,4 @@ func (c *Config) checkSharedPod(pod *corev1.Pod) bool {
 		}
 	}
 	return false
-}
-
-func query() {
-
 }

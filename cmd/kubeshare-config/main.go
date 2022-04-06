@@ -2,12 +2,17 @@ package main
 
 import (
 	"flag"
+	"os"
 	"time"
 
 	//kubernetes
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
+
+	// prometheus
+	"github.com/prometheus/client_golang/api"
+	promeV1 "github.com/prometheus/client_golang/api/prometheus/v1"
 
 	// KubeShare
 	"KubeShare/pkg/config"
@@ -37,6 +42,16 @@ func main() {
 
 	ksl := logger.New(*level, logPath)
 
+	client, err := api.NewClient(api.Config{
+		Address: *prometheusURL,
+	})
+	if err != nil {
+		ksl.Printf("Error creating client: %v\n", err)
+		os.Exit(1)
+	}
+
+	promeAPI := promeV1.NewAPI(client)
+
 	// set up signals so we handle the first shutdown signal gracefully
 	stopCh := signals.SetupSignalHandler()
 
@@ -54,6 +69,6 @@ func main() {
 	// NewSharedInformerFactory caches all objects of a resource in all namespaces in the store
 	informerFactory := informers.NewSharedInformerFactory(clientset, time.Second*30)
 
-	config.NewConfig(ksl, clientset, prometheusURL, informerFactory.Core().V1().Pods(), stopCh)
+	config.NewConfig(ksl, promeAPI, clientset, informerFactory.Core().V1().Pods(), stopCh)
 
 }
