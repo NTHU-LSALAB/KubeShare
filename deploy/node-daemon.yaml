@@ -58,8 +58,6 @@ spec:
         volumeMounts:
         - name: "kubeshare-library"
           mountPath: /kubeshare/library  
-        - name: "exporter"
-          mountPath: /tmp
         - name: "kubeshare-log"
           mountPath: "/kubeshare/log"
       containers:
@@ -74,7 +72,7 @@ spec:
         command: ["kubeshare-config"]
         args:
           - --level=3
-          - --prometheusURL=http://140.114.78.243:30093
+          - --prometheusURL=http://prometheus-k8s.monitoring:9090 #http://140.114.78.243:30093
         volumeMounts:
         - name: "kubeshare-scheduler"
           mountPath: "/kubeshare/scheduler"
@@ -90,8 +88,6 @@ spec:
           mountPath: "/kubeshare/scheduler"
         - name: "kubeshare-library"
           mountPath: "/kubeshare/library"
-        - name: "exporter"
-          mountPath: /tmp
         - name: "kubeshare-log"
           mountPath: "/kubeshare/log"
       volumes:
@@ -101,9 +97,6 @@ spec:
       - name: "kubeshare-library"
         hostPath:
           path: "/kubeshare/library"
-      - name: "exporter"
-        hostPath:
-          path: "/tmp"
       - name: "kubeshare-log"
         hostPath:
           path: "/kubeshare/log"

@@ -1,0 +1,16 @@
+cellTypes:
+  GTX1080-NODE:
+    childCellType: "NVIDIA GeForce GTX 1080"
+    childCellNumber: 2
+    childCellPriority: 100
+    isNodeLevel: true
+  3-GTX1080-NODE:
+    childCellType: GTX1080-NODE
+    childCellNumber: 3
+
+cells:
+- cellType: 3-GTX1080-NODE
+  cellChildren:
+  - cellId: juno
+  - cellId: apple
+  - cellId: banana
