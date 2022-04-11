@@ -3,6 +3,7 @@ package scheduler
 import (
 	"context"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -60,6 +61,10 @@ type KubeShareScheduler struct {
 	handle   framework.FrameworkHandle
 	promeAPI promeV1.API
 	ksl      *logrus.Logger
+
+	// allocation
+	gpuPriority      map[string]int32
+	gpuPriorityMutex *sync.RWMutex
 }
 
 // initializes a new plugin and returns it
@@ -91,17 +96,24 @@ func New(config *runtime.Unknown, handle framework.FrameworkHandle) (framework.P
 	promeAPI := promeV1.NewAPI(client)
 
 	kss := &KubeShareScheduler{
-		args:     args,
-		handle:   handle,
-		promeAPI: promeAPI,
-		ksl:      ksl,
+		args:             args,
+		handle:           handle,
+		promeAPI:         promeAPI,
+		gpuPriority:      map[string]int32{},
+		gpuPriorityMutex: &sync.RWMutex{},
+		ksl:              ksl,
 	}
 
 	kubeshareConfig := kss.initRawConfig()
 	ksl.Debugln("=================READ CONFIG=================")
 	ksl.Debugf("%+v", kubeshareConfig)
-
 	kss.watchConfig(kubeshareConfig)
+
+	ksl.Debugln("=================CELL ELEMENTS=================")
+	ce := kss.buildCellChains(kubeshareConfig.CellTypes)
+	for k, v := range ce {
+		ksl.Debugf("%+v = %+v", k, v)
+	}
 
 	return kss, nil
 }
