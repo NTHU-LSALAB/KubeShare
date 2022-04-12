@@ -1,5 +1,11 @@
 package scheduler
 
+import (
+	"strings"
+
+	"github.com/sirupsen/logrus"
+)
+
 type (
 	CellState string
 	CellList  []Cell
@@ -14,7 +20,7 @@ const (
 )
 
 // internal structure to build the cell elements
-
+// preprocess the information about the cell
 type cellElement struct {
 	cellType           string  // cell types
 	level              int     // cell level, leaf cell is 1
@@ -83,7 +89,7 @@ func (kss *KubeShareScheduler) addCell(
 		cellType:           cellType,
 		level:              childCellElement.level + 1,
 		priority:           childCellElement.priority,
-		childCellType:      childCellElement.childCellType,
+		childCellType:      childCellElement.cellType,
 		childCellNumber:    float64(cts.ChildCellNumber),
 		leafCellType:       childCellElement.leafCellType,
 		leafCellNumber:     childCellElement.leafCellNumber * float64(cts.ChildCellNumber),
@@ -99,12 +105,15 @@ type Cell struct {
 	level              int
 	atOrHigherThanNode bool // true if the cell is at or higher than node level
 
-	capacity   float64
 	allocation float64
 
 	priority int32
 	uuid     string
-	model    string
+
+	leafCellType   string
+	leafCellNumber float64
+
+	node string
 
 	healthy bool
 	state   CellState
@@ -118,9 +127,9 @@ func NewCell(
 	id string,
 	level int,
 	atOrHigherThanNode bool,
-	capacity float64,
+	leafCellNumber float64,
 	priority int32,
-	model string,
+	leafCellType string,
 
 ) *Cell {
 	return &Cell{
@@ -128,12 +137,118 @@ func NewCell(
 		id:                 id,
 		level:              level,
 		atOrHigherThanNode: atOrHigherThanNode,
-		capacity:           capacity,
 		allocation:         0.0,
 		priority:           priority,
 		uuid:               "",
-		model:              model,
+		leafCellType:       leafCellType,
+		leafCellNumber:     leafCellNumber,
 		healthy:            false,
 		state:              CellFree,
 	}
+}
+
+func NewCellList(top int) LevelCellList {
+	ccl := LevelCellList{}
+	for i := lowestLevel; i <= top; i++ {
+		ccl[i] = CellList{}
+	}
+	return ccl
+}
+
+type cellConstructor struct {
+	// input
+	cellElements map[string]*cellElement
+	cells        []CellSpec
+	// output
+
+	cellFreeList map[string]LevelCellList
+	// internal status
+	buildingType string
+	buildingSpec CellSpec
+
+	// logger
+	ksl *logrus.Logger
+}
+
+func newCellConstructor(cellElements map[string]*cellElement, cells []CellSpec, ksl *logrus.Logger) *cellConstructor {
+	return &cellConstructor{
+		cellElements: cellElements,
+		cells:        cells,
+		cellFreeList: map[string]LevelCellList{},
+		ksl:          ksl,
+	}
+}
+
+func (c *cellConstructor) build() (cellFreeList map[string]LevelCellList) {
+	for _, spec := range c.cells {
+		c.buildingType = spec.CellType
+		c.buildingSpec = spec
+
+		rootCell := c.buildFullTree()
+		cellType := rootCell.leafCellType
+		cellLevel := rootCell.level
+
+		// initialize the cell free list
+		if _, ok := c.cellFreeList[cellType]; !ok {
+			c.cellFreeList[cellType] = NewCellList(cellLevel)
+		}
+		c.cellFreeList[cellType][cellLevel] = append(
+			c.cellFreeList[cellType][cellLevel], *rootCell)
+	}
+	return c.cellFreeList
+}
+
+func (c *cellConstructor) buildFullTree() *Cell {
+	buildingType := c.buildingType
+
+	c.ksl.Debugf("buildFullTree, %v", buildingType)
+	//check the cellElement of the cellType
+	ce, ok := c.cellElements[buildingType]
+	if !ok {
+		c.ksl.Errorf("cellType %v in Cells is not found in cell types definition", buildingType)
+	}
+	// make sure cells in kubeshare-config.yaml will start from node or above
+	if !ce.atOrHigherThanNode {
+		c.ksl.Errorf("top cell must be node-level or above: %v", buildingType)
+	}
+
+	cellInstance := c.buildChildCell(c.buildingSpec, buildingType, "")
+	cellInstance.leafCellType = ce.leafCellType
+
+	return cellInstance
+}
+
+func (c *cellConstructor) buildChildCell(
+	spec CellSpec,
+	cellType string,
+	currentNode string) *Cell {
+	c.ksl.Debugf("buildChildCell, %v ", cellType)
+
+	ce := c.cellElements[cellType]
+	// node-level: pass node name it to its child
+	if ce.atOrHigherThanNode && !ce.isMultiNodes {
+		splitID := strings.Split(string(spec.CellID), "/")
+		currentNode = splitID[len(splitID)-1]
+	}
+	cellInstance := NewCell(c.buildingType, spec.CellID, ce.level, ce.atOrHigherThanNode || ce.isMultiNodes, ce.leafCellNumber, ce.priority, ce.leafCellType)
+	if ce.level == 1 {
+		cellInstance.node = currentNode
+		// TODO : insert uuid
+		return cellInstance
+	}
+
+	var currentCellChildren CellList
+	for _, childSpec := range spec.CellChildren {
+		childCellInstance := c.buildChildCell(childSpec, ce.childCellType, currentNode)
+		childCellInstance.parent = cellInstance
+		currentCellChildren = append(currentCellChildren, *childCellInstance)
+		if !ce.isMultiNodes {
+			childCellInstance.node = currentNode
+		}
+	}
+
+	// update current cell children and resource
+	cellInstance.child = currentCellChildren
+
+	return cellInstance
 }

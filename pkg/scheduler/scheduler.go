@@ -3,7 +3,6 @@ package scheduler
 import (
 	"context"
 	"os"
-	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -63,8 +62,9 @@ type KubeShareScheduler struct {
 	ksl      *logrus.Logger
 
 	// allocation
-	gpuPriority      map[string]int32
-	gpuPriorityMutex *sync.RWMutex
+	gpuPriority  map[string]int32
+	cellFreeList map[string]LevelCellList
+	cellElements map[string]*cellElement
 }
 
 // initializes a new plugin and returns it
@@ -96,12 +96,11 @@ func New(config *runtime.Unknown, handle framework.FrameworkHandle) (framework.P
 	promeAPI := promeV1.NewAPI(client)
 
 	kss := &KubeShareScheduler{
-		args:             args,
-		handle:           handle,
-		promeAPI:         promeAPI,
-		gpuPriority:      map[string]int32{},
-		gpuPriorityMutex: &sync.RWMutex{},
-		ksl:              ksl,
+		args:        args,
+		handle:      handle,
+		promeAPI:    promeAPI,
+		gpuPriority: map[string]int32{},
+		ksl:         ksl,
 	}
 
 	kubeshareConfig := kss.initRawConfig()
@@ -114,7 +113,14 @@ func New(config *runtime.Unknown, handle framework.FrameworkHandle) (framework.P
 	for k, v := range ce {
 		ksl.Debugf("%+v = %+v", k, v)
 	}
+	ksl.Debugln("=================FREE CELL=================")
+	cellFreeList := newCellConstructor(ce, kubeshareConfig.Cells, ksl).build()
+	for k, v := range cellFreeList {
+		ksl.Debugf("%+v = %+v", k, v)
+	}
 
+	kss.cellElements = ce
+	kss.cellFreeList = cellFreeList
 	return kss, nil
 }
 
