@@ -13,52 +13,8 @@ const (
 	lowestLevel  int       = 1
 )
 
-type Cell struct {
-	cellType           string
-	id                 string
-	level              int
-	atOrHigherThanNode bool // true if the cell is at or higher than node level
+// internal structure to build the cell elements
 
-	capacity   float64
-	allocation float64
-
-	priority int32
-	uuid     string
-	model    string
-
-	healthy bool
-	state   CellState
-
-	parent *Cell    // pointer to its parent cell
-	child  CellList // pointer to its children cells
-}
-
-func NewCell(
-	cellType string,
-	id string,
-	level int,
-	atOrHigherThanNode bool,
-	capacity float64,
-	priority int32,
-	model string,
-
-) *Cell {
-	return &Cell{
-		cellType:           cellType,
-		id:                 id,
-		level:              level,
-		atOrHigherThanNode: atOrHigherThanNode,
-		capacity:           capacity,
-		allocation:         0.0,
-		priority:           priority,
-		uuid:               "",
-		model:              model,
-		healthy:            false,
-		state:              CellFree,
-	}
-}
-
-// internal structure to build the cell tree
 type cellElement struct {
 	cellType           string  // cell types
 	level              int     // cell level, leaf cell is 1
@@ -105,17 +61,17 @@ func (kss *KubeShareScheduler) addCell(
 			atOrHigherThanNode: false,
 			isMultiNodes:       false,
 		}
+
+		// kss.gpuPriorityMutex.Lock()
+		// defer kss.gpuPriorityMutex.Unlock()
+		kss.gpuPriority[cellType] = priority
+		kss.ksl.Debugf("gpu priority %v = %v", cellType, priority)
 		return
 	}
 
 	// recursively add children
 	child := cts.ChildCellType
 	priority = cts.ChildCellPriority
-
-	kss.gpuPriorityMutex.Lock()
-	defer kss.gpuPriorityMutex.Unlock()
-	kss.gpuPriority[child] = priority
-	kss.ksl.Debugf("gpu priority %v = %v", child, priority)
 
 	if _, ok := cellElements[child]; !ok {
 		kss.addCell(child, cellTypes, cellElements, priority)
@@ -135,4 +91,49 @@ func (kss *KubeShareScheduler) addCell(
 		isMultiNodes:       childCellElement.atOrHigherThanNode,
 	}
 
+}
+
+type Cell struct {
+	cellType           string
+	id                 string
+	level              int
+	atOrHigherThanNode bool // true if the cell is at or higher than node level
+
+	capacity   float64
+	allocation float64
+
+	priority int32
+	uuid     string
+	model    string
+
+	healthy bool
+	state   CellState
+
+	parent *Cell    // pointer to its parent cell
+	child  CellList // pointer to its children cells
+}
+
+func NewCell(
+	cellType string,
+	id string,
+	level int,
+	atOrHigherThanNode bool,
+	capacity float64,
+	priority int32,
+	model string,
+
+) *Cell {
+	return &Cell{
+		cellType:           cellType,
+		id:                 id,
+		level:              level,
+		atOrHigherThanNode: atOrHigherThanNode,
+		capacity:           capacity,
+		allocation:         0.0,
+		priority:           priority,
+		uuid:               "",
+		model:              model,
+		healthy:            false,
+		state:              CellFree,
+	}
 }
