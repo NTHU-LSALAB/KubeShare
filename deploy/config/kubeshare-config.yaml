@@ -7,6 +7,11 @@ cellTypes:
   3-GTX1080-NODE:
     childCellType: GTX1080-NODE
     childCellNumber: 3
+  RTX2070-NODE:
+    childCellType: "NVIDIA GeForce RTX 2070"
+    childCellNumber: 1
+    childCellPriority: 200
+    isNodeLevel: true
 
 cells:
 - cellType: 3-GTX1080-NODE
@@ -14,3 +19,5 @@ cells:
   - cellId: juno
   - cellId: apple
   - cellId: banana
+- cellType: RTX2070-NODE
+  cellId: cupid

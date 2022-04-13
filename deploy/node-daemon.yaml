@@ -60,6 +60,7 @@ spec:
           mountPath: /kubeshare/library  
         - name: "kubeshare-log"
           mountPath: "/kubeshare/log"
+      hostNetwork: true
       containers:
       - name: config
         image: riyazhu/kubeshare-config:db #20210706124950
@@ -72,7 +73,7 @@ spec:
         command: ["kubeshare-config"]
         args:
           - --level=3
-          - --prometheusURL=http://prometheus-k8s.monitoring:9090 #http://140.114.78.243:30093
+          - --prometheusURL=http://140.114.78.243:30093
         volumeMounts:
         - name: "kubeshare-scheduler"
           mountPath: "/kubeshare/scheduler"

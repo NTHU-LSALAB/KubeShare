@@ -2,7 +2,9 @@ package scheduler
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -14,10 +16,12 @@ import (
 	// KubeShare
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/cache"
 	framework "k8s.io/kubernetes/pkg/scheduler/framework/v1alpha1"
 	schedulernodeinfo "k8s.io/kubernetes/pkg/scheduler/nodeinfo"
 
 	"KubeShare/pkg/logger"
+	"KubeShare/pkg/signals"
 )
 
 const (
@@ -65,6 +69,7 @@ type KubeShareScheduler struct {
 	gpuPriority  map[string]int32
 	cellFreeList map[string]LevelCellList
 	cellElements map[string]*cellElement
+	cellMutex    *sync.RWMutex
 }
 
 // initializes a new plugin and returns it
@@ -100,27 +105,64 @@ func New(config *runtime.Unknown, handle framework.FrameworkHandle) (framework.P
 		handle:      handle,
 		promeAPI:    promeAPI,
 		gpuPriority: map[string]int32{},
+		cellMutex:   &sync.RWMutex{},
 		ksl:         ksl,
 	}
-
+	// gpu topology
 	kubeshareConfig := kss.initRawConfig()
-	ksl.Debugln("=================READ CONFIG=================")
-	ksl.Debugf("%+v", kubeshareConfig)
+	// ksl.Debugln("=================READ CONFIG=================")
+	// ksl.Debugf("%+v", kubeshareConfig)
 	kss.watchConfig(kubeshareConfig)
 
-	ksl.Debugln("=================CELL ELEMENTS=================")
+	// ksl.Debugln("=================CELL ELEMENTS=================")
 	ce := kss.buildCellChains(kubeshareConfig.CellTypes)
-	for k, v := range ce {
-		ksl.Debugf("%+v = %+v", k, v)
-	}
-	ksl.Debugln("=================FREE CELL=================")
+	// for k, v := range ce {
+	// 	ksl.Debugf("%+v = %+v", k, v)
+	// }
+	// ksl.Debugln("=================FREE CELL=================")
 	cellFreeList := newCellConstructor(ce, kubeshareConfig.Cells, ksl).build()
+	// for k, v := range cellFreeList {
+	// 	ksl.Debugf("%+v = ", k)
+	// 	for l, cl := range v {
+	// 		for i := range cl {
+	// 			ksl.Debugf("%+v = %+v", l, cl[i])
+	// 		}
+	// 	}
+	// }
+
+	ksl.Debugln("=================FREE CELL=================")
+	ksl.Debugf("size of Free cell: %v", len(cellFreeList))
 	for k, v := range cellFreeList {
 		ksl.Debugf("%+v = %+v", k, v)
 	}
 
 	kss.cellElements = ce
 	kss.cellFreeList = cellFreeList
+
+	// try to comment the following two command before run TestPermit
+	stopCh := signals.SetupSignalHandler()
+
+	nodeInformer := handle.SharedInformerFactory().Core().V1().Nodes().Informer()
+	nodeInformer.AddEventHandler(
+		cache.FilteringResourceEventHandler{
+			FilterFunc: kss.isGPUNode,
+			Handler: cache.ResourceEventHandlerFuncs{
+				AddFunc: kss.addNode,
+				// UpdateFunc: kss.updateNode,
+				// DeleteFunc: kss.deleteNode,
+			},
+		},
+	)
+
+	go nodeInformer.Run(stopCh)
+
+	if !cache.WaitForCacheSync(
+		stopCh,
+		nodeInformer.HasSynced) {
+		//podInformer.HasSynced) {
+		panic(fmt.Errorf("Failed to WaitForCacheSync"))
+	}
+
 	return kss, nil
 }
 

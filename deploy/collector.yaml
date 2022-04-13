@@ -9,6 +9,7 @@ spec:
   sessionAffinity: ClientIP
   selector:
     app: kubeshare-collector
+  clusterIP: None
   ports:
   - name: collector
     port: 9004
@@ -51,6 +52,7 @@ spec:
       labels:
         app: kubeshare-collector
     spec:
+      hostNetwork: true
       nodeSelector:
         SharedGPU: "true"
       containers:

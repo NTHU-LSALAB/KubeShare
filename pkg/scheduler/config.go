@@ -127,6 +127,7 @@ func (kss *KubeShareScheduler) watchConfig(c *Config) {
 	configPath := kss.args.kubeShareConfig
 	v := viper.New()
 	v.SetConfigFile(configPath)
+	v.WatchConfig()
 	kss.ksl.Info("Watching config file: ", configPath)
 
 	v.OnConfigChange(func(e fsnotify.Event) {

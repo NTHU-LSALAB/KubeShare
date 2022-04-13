@@ -99,6 +99,11 @@ func (c *Config) filterPod(obj interface{}) bool {
 
 func (c *Config) checkSharedPod(pod *corev1.Pod) bool {
 
+	// only need to process the pod scheduled
+	if pod.Spec.NodeName == "" {
+		return false
+	}
+
 	limit, ok := pod.Labels[KubeShareResourceGPULimit]
 
 	if !ok {

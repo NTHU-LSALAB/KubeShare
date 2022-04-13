@@ -8,7 +8,7 @@ import (
 
 type (
 	CellState string
-	CellList  []Cell
+	CellList  []*Cell
 	// maps each level to cellList
 	LevelCellList map[int]CellList
 )
@@ -16,6 +16,8 @@ type (
 const (
 	CellFree     CellState = "FREE"
 	CellReserved CellState = "RESERVED"
+	CellPartial  CellState = "PARTIAL"
+	CellUsed     CellState = "USED"
 	lowestLevel  int       = 1
 )
 
@@ -109,6 +111,7 @@ type Cell struct {
 
 	priority int32
 	uuid     string
+	memory   int64
 
 	leafCellType   string
 	leafCellNumber float64
@@ -159,12 +162,9 @@ type cellConstructor struct {
 	// input
 	cellElements map[string]*cellElement
 	cells        []CellSpec
-	// output
 
+	// output
 	cellFreeList map[string]LevelCellList
-	// internal status
-	buildingType string
-	buildingSpec CellSpec
 
 	// logger
 	ksl *logrus.Logger
@@ -181,10 +181,8 @@ func newCellConstructor(cellElements map[string]*cellElement, cells []CellSpec, 
 
 func (c *cellConstructor) build() (cellFreeList map[string]LevelCellList) {
 	for _, spec := range c.cells {
-		c.buildingType = spec.CellType
-		c.buildingSpec = spec
 
-		rootCell := c.buildFullTree()
+		rootCell := c.buildFullTree(spec.CellType, spec)
 		cellType := rootCell.leafCellType
 		cellLevel := rootCell.level
 
@@ -193,13 +191,12 @@ func (c *cellConstructor) build() (cellFreeList map[string]LevelCellList) {
 			c.cellFreeList[cellType] = NewCellList(cellLevel)
 		}
 		c.cellFreeList[cellType][cellLevel] = append(
-			c.cellFreeList[cellType][cellLevel], *rootCell)
+			c.cellFreeList[cellType][cellLevel], rootCell)
 	}
 	return c.cellFreeList
 }
 
-func (c *cellConstructor) buildFullTree() *Cell {
-	buildingType := c.buildingType
+func (c *cellConstructor) buildFullTree(buildingType string, buildingSpec CellSpec) *Cell {
 
 	c.ksl.Debugf("buildFullTree, %v", buildingType)
 	//check the cellElement of the cellType
@@ -212,7 +209,7 @@ func (c *cellConstructor) buildFullTree() *Cell {
 		c.ksl.Errorf("top cell must be node-level or above: %v", buildingType)
 	}
 
-	cellInstance := c.buildChildCell(c.buildingSpec, buildingType, "")
+	cellInstance := c.buildChildCell(buildingSpec, buildingType, "")
 	cellInstance.leafCellType = ce.leafCellType
 
 	return cellInstance
@@ -230,9 +227,12 @@ func (c *cellConstructor) buildChildCell(
 		splitID := strings.Split(string(spec.CellID), "/")
 		currentNode = splitID[len(splitID)-1]
 	}
-	cellInstance := NewCell(c.buildingType, spec.CellID, ce.level, ce.atOrHigherThanNode || ce.isMultiNodes, ce.leafCellNumber, ce.priority, ce.leafCellType)
-	if ce.level == 1 {
+	cellInstance := NewCell(cellType, spec.CellID, ce.level, ce.atOrHigherThanNode || ce.isMultiNodes, ce.leafCellNumber, ce.priority, ce.leafCellType)
+	if !ce.isMultiNodes {
 		cellInstance.node = currentNode
+	}
+
+	if ce.level == 1 {
 		// TODO : insert uuid
 		return cellInstance
 	}
@@ -241,10 +241,11 @@ func (c *cellConstructor) buildChildCell(
 	for _, childSpec := range spec.CellChildren {
 		childCellInstance := c.buildChildCell(childSpec, ce.childCellType, currentNode)
 		childCellInstance.parent = cellInstance
-		currentCellChildren = append(currentCellChildren, *childCellInstance)
 		if !ce.isMultiNodes {
 			childCellInstance.node = currentNode
 		}
+		currentCellChildren = append(currentCellChildren, childCellInstance)
+		c.ksl.Debugf("%+v", childCellInstance)
 	}
 
 	// update current cell children and resource
