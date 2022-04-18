@@ -52,7 +52,7 @@ spec:
       labels:
         app: kubeshare-collector
     spec:
-      hostNetwork: true
+            # hostNetwork: true
       nodeSelector:
         SharedGPU: "true"
       containers:

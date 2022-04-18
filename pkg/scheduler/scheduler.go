@@ -66,10 +66,11 @@ type KubeShareScheduler struct {
 	ksl      *logrus.Logger
 
 	// allocation
-	gpuPriority  map[string]int32
-	cellFreeList map[string]LevelCellList
-	cellElements map[string]*cellElement
-	cellMutex    *sync.RWMutex
+	gpuPriority       map[string]int32
+	sortGPUByPriority []string
+	cellFreeList      map[string]LevelCellList
+	cellElements      map[string]*cellElement
+	cellMutex         *sync.RWMutex
 }
 
 // initializes a new plugin and returns it

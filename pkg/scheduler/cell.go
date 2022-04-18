@@ -1,6 +1,7 @@
 package scheduler
 
 import (
+	"sort"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -40,7 +41,27 @@ func (kss *KubeShareScheduler) buildCellChains(cellTypes map[string]CellTypeSpec
 	for cellType := range cellTypes {
 		kss.addCell(cellType, cellTypes, cellElements, 1)
 	}
+
+	kss.sortGPUPriority()
+
 	return cellElements
+}
+
+func (kss *KubeShareScheduler) sortGPUPriority() {
+	models := make([]string, 0, len(kss.gpuPriority))
+	prioriries := kss.gpuPriority
+	for model := range prioriries {
+		models = append(models, model)
+	}
+
+	sort.SliceStable(models, func(i, j int) bool {
+		return prioriries[models[i]] > prioriries[models[j]]
+	})
+	kss.sortGPUByPriority = models
+
+	for _, model := range kss.sortGPUByPriority {
+		kss.ksl.Infof("GPU priority: %v\t%v", model, kss.gpuPriority[model])
+	}
 }
 
 func (kss *KubeShareScheduler) addCell(

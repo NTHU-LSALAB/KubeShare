@@ -34,7 +34,7 @@ func (kss *KubeShareScheduler) addNode(obj interface{}) {
 	if isNodeHealth(node) {
 		kss.setNodeStatus(name, true)
 	} else {
-
+		kss.setNodeStatus(name, false)
 	}
 
 }

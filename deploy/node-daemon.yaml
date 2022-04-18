@@ -73,7 +73,7 @@ spec:
         command: ["kubeshare-config"]
         args:
           - --level=3
-          - --prometheusURL=http://140.114.78.243:30093
+          - --prometheusURL=http://10.100.132.133:9090
         volumeMounts:
         - name: "kubeshare-scheduler"
           mountPath: "/kubeshare/scheduler"
