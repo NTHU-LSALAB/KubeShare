@@ -66,8 +66,9 @@ type KubeShareScheduler struct {
 	ksl      *logrus.Logger
 
 	// allocation
-	gpuPriority       map[string]int32
+	gpuPriority       map[string]int32 // key: model name ; val: priority
 	sortGPUByPriority []string
+	gpuInfos          map[string]map[string][]GPU // key: node name  ; val: {model, all information of gpu in the node}
 	cellFreeList      map[string]LevelCellList
 	cellElements      map[string]*cellElement
 	cellMutex         *sync.RWMutex
@@ -106,6 +107,7 @@ func New(config *runtime.Unknown, handle framework.FrameworkHandle) (framework.P
 		handle:      handle,
 		promeAPI:    promeAPI,
 		gpuPriority: map[string]int32{},
+		gpuInfos:    map[string]map[string][]GPU{},
 		cellMutex:   &sync.RWMutex{},
 		ksl:         ksl,
 	}

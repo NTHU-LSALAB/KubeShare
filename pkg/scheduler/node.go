@@ -28,6 +28,8 @@ func (kss *KubeShareScheduler) addNode(obj interface{}) {
 
 	kss.ksl.Infof("[New node Event] %v", name)
 
+	kss.getGPUByNode(name)
+
 	kss.cellMutex.Lock()
 	defer kss.cellMutex.Unlock()
 
@@ -74,34 +76,58 @@ func (kss *KubeShareScheduler) setNodeStatus(nodeName string, healthy bool) {
 	for _, freeList := range kss.cellFreeList {
 		for _, cellList := range freeList {
 			for _, cell := range cellList {
-				kss.setCellHeathy(cell, healthy, nodeName)
+				kss.setCellStatus(cell, healthy, nodeName)
 			}
 		}
 	}
 
-	kss.ksl.Debugln("=================FREE CELL=================")
-	for k, v := range kss.cellFreeList {
-		kss.ksl.Debugf("%+v = %+v", k, v)
-	}
 }
 
 //TODO: set uuid
-func (kss *KubeShareScheduler) setCellHeathy(cell *Cell, healthy bool, nodeName string) {
+func (kss *KubeShareScheduler) setCellStatus(cell *Cell, healthy bool, nodeName string) {
+	// get the gpu information of node & cell type
+	GPUs := kss.gpuInfos[nodeName][cell.leafCellType]
+	n := len(GPUs)
+	// if there is no specified gpu in the node,
+	// it means there is no the specified cells that need to be processed too.
+	if n == 0 {
+		kss.ksl.Debugf("No corresponding gpu %v in the node %v", cell.leafCellType, nodeName)
+		return
+	}
+
 	s := stack.NewStack()
 	s.Push(cell)
 
+	idx := 0
+
+	kss.ksl.Debug("===============CHECK===============")
+	kss.ksl.Debugf("Currently, there are %v gpus(%v) in node %v ", n, cell.leafCellType, nodeName)
+
 	for s.Len() > 0 {
 		current := s.Pop().(*Cell)
+
 		kss.ksl.Debugf("Cell: %+v", current)
+
 		if current.healthy == healthy {
 			continue
 		}
+
 		node := current.node
 		if node == nodeName || node == "" {
 			current.healthy = healthy
+
+			// set the uuid & memory
+			if current.level == 1 && idx < n {
+				current.uuid = GPUs[idx].uuid
+				current.fullMemory = GPUs[idx].memory
+				current.freeMemory = current.fullMemory
+				idx++
+				kss.ksl.Debugf("Level 1: %+v", current)
+			}
+
 			parent := current.parent
 			if parent != nil && parent.healthy != healthy {
-				kss.ksl.Debugf("Parent: %+v", current)
+				kss.ksl.Debugf("Parent: %+v", parent)
 				s.Push(parent)
 			}
 			child := current.child
@@ -112,11 +138,12 @@ func (kss *KubeShareScheduler) setCellHeathy(cell *Cell, healthy bool, nodeName 
 
 				node = child[i].node
 				if (node == nodeName || node == "") && child[i].healthy != healthy {
-					kss.ksl.Debugf("Child: %+v", current)
+					kss.ksl.Debugf("Child: %+v", child[i])
 					s.Push(child[i])
 				}
 			}
 		}
 
 	}
+
 }

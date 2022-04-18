@@ -94,7 +94,6 @@ func (kss *KubeShareScheduler) addCell(
 		// kss.gpuPriorityMutex.Lock()
 		// defer kss.gpuPriorityMutex.Unlock()
 		kss.gpuPriority[cellType] = priority
-		kss.ksl.Debugf("gpu priority %v = %v", cellType, priority)
 		return
 	}
 
@@ -128,16 +127,15 @@ type Cell struct {
 	level              int
 	atOrHigherThanNode bool // true if the cell is at or higher than node level
 
-	allocation float64
-
 	priority int32
 	uuid     string
-	memory   int64
 
 	leafCellType   string
 	leafCellNumber float64
-
-	node string
+	freeMemory     int64
+	fullMemory     int64
+	allocation     float64
+	node           string
 
 	healthy bool
 	state   CellState
@@ -161,9 +159,11 @@ func NewCell(
 		id:                 id,
 		level:              level,
 		atOrHigherThanNode: atOrHigherThanNode,
-		allocation:         0.0,
 		priority:           priority,
 		uuid:               "",
+		freeMemory:         0,
+		fullMemory:         0,
+		allocation:         0.0,
 		leafCellType:       leafCellType,
 		leafCellNumber:     leafCellNumber,
 		healthy:            false,
@@ -219,7 +219,6 @@ func (c *cellConstructor) build() (cellFreeList map[string]LevelCellList) {
 
 func (c *cellConstructor) buildFullTree(buildingType string, buildingSpec CellSpec) *Cell {
 
-	c.ksl.Debugf("buildFullTree, %v", buildingType)
 	//check the cellElement of the cellType
 	ce, ok := c.cellElements[buildingType]
 	if !ok {
@@ -240,7 +239,6 @@ func (c *cellConstructor) buildChildCell(
 	spec CellSpec,
 	cellType string,
 	currentNode string) *Cell {
-	c.ksl.Debugf("buildChildCell, %v ", cellType)
 
 	ce := c.cellElements[cellType]
 	// node-level: pass node name it to its child

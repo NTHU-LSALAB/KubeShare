@@ -64,9 +64,12 @@ func (kss *KubeShareScheduler) checkPhysicalCells(c *Config) {
 	cells := c.Cells
 
 	for idx, cell := range cells {
-		_, ok := cellTypes[cell.CellType]
+		cts, ok := cellTypes[cell.CellType]
 		if !ok {
 			kss.ksl.Errorf("Cells contains unknown cellType: %v", cell.CellType)
+		}
+		if cts.ChildCellPriority > 1000 || cts.ChildCellPriority < 0 {
+			kss.ksl.Errorf("Cell Priority must be in  0~1000")
 		}
 		inferCellSpec(&cells[idx], cellTypes, cell.CellType, idx+1)
 	}
