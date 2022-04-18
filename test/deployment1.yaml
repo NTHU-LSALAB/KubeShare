@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: deployment1
+  labels:
+    app: py
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: py
+  template:
+    metadata:
+      labels:
+        app: py
+        "sharedgpu/gpu_request": "0.2"
+        "sharedgpu/gpu_limit": "1.0"
+        #        "sharedgpu/group_name": "deployment1"
+        #"sharedgpu/min_available": 3
+    spec:
+      schedulerName: kubeshare-scheduler
+      containers:
+      - name: pytorch
+        image: pytorch_1.15_gpu_gemini_2.0:latest
+        imagePullPolicy: IfNotPresent
+        

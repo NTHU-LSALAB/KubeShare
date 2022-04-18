@@ -252,7 +252,6 @@ func (c *cellConstructor) buildChildCell(
 	}
 
 	if ce.level == 1 {
-		// TODO : insert uuid
 		return cellInstance
 	}
 

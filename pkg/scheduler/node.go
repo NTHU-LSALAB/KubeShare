@@ -26,7 +26,7 @@ func (kss *KubeShareScheduler) addNode(obj interface{}) {
 	node := kss.convertToNode(obj)
 	name := node.Name
 
-	kss.ksl.Infof("[Event: ADD NODE] %v", name)
+	kss.ksl.Infof("[ADD NODE] %v", name)
 
 	kss.getGPUByNode(name)
 
@@ -45,7 +45,7 @@ func (kss *KubeShareScheduler) updateNode(oldObj, newObj interface{}) {
 	//oldNode := kss.convertToNode(oldObj)
 	newNode := kss.convertToNode(newObj)
 	name := newNode.Name
-	kss.ksl.Infof("[Event: UPDATE NODE] %v", name)
+	kss.ksl.Infof("[UPDATE NODE] %v", name)
 	kss.cellMutex.Lock()
 	defer kss.cellMutex.Unlock()
 
@@ -59,7 +59,7 @@ func (kss *KubeShareScheduler) updateNode(oldObj, newObj interface{}) {
 func (kss *KubeShareScheduler) deleteNode(obj interface{}) {
 	node := kss.convertToNode(obj)
 	name := node.Name
-	kss.ksl.Infof("[Event: DELETE NODE] %v", name)
+	kss.ksl.Infof("[DELETE NODE] %v", name)
 
 	kss.cellMutex.Lock()
 	defer kss.cellMutex.Unlock()

@@ -72,6 +72,11 @@ type KubeShareScheduler struct {
 	cellFreeList      map[string]LevelCellList
 	cellElements      map[string]*cellElement
 	cellMutex         *sync.RWMutex
+
+	// pod group
+	// key: <namespace>/<PodGroup name> ; value: *PodGroupInfo.
+	podGroupInfos map[string]*PodGroupInfo
+	podGroupMutex *sync.RWMutex
 }
 
 // initializes a new plugin and returns it
@@ -103,13 +108,15 @@ func New(config *runtime.Unknown, handle framework.FrameworkHandle) (framework.P
 	promeAPI := promeV1.NewAPI(client)
 
 	kss := &KubeShareScheduler{
-		args:        args,
-		handle:      handle,
-		promeAPI:    promeAPI,
-		gpuPriority: map[string]int32{},
-		gpuInfos:    map[string]map[string][]GPU{},
-		cellMutex:   &sync.RWMutex{},
-		ksl:         ksl,
+		args:          args,
+		handle:        handle,
+		promeAPI:      promeAPI,
+		gpuPriority:   map[string]int32{},
+		gpuInfos:      map[string]map[string][]GPU{},
+		cellMutex:     &sync.RWMutex{},
+		podGroupInfos: map[string]*PodGroupInfo{},
+		podGroupMutex: &sync.RWMutex{},
+		ksl:           ksl,
 	}
 	// gpu topology
 	kubeshareConfig := kss.initRawConfig()
@@ -159,11 +166,24 @@ func New(config *runtime.Unknown, handle framework.FrameworkHandle) (framework.P
 
 	go nodeInformer.Run(stopCh)
 
+	podInformer := handle.SharedInformerFactory().Core().V1().Pods().Informer()
+	podInformer.AddEventHandler(
+		cache.FilteringResourceEventHandler{
+			FilterFunc: filterPod,
+			Handler: cache.ResourceEventHandlerFuncs{
+				AddFunc:    kss.addPod,
+				UpdateFunc: kss.updatePod,
+				DeleteFunc: kss.deletePod,
+			},
+		},
+	)
+	go podInformer.Run(stopCh)
+
 	if !cache.WaitForCacheSync(
 		stopCh,
-		nodeInformer.HasSynced) {
-		//podInformer.HasSynced) {
-		panic(fmt.Errorf("Failed to WaitForCacheSync"))
+		nodeInformer.HasSynced,
+		podInformer.HasSynced) {
+		panic(fmt.Errorf("failed to WaitForCacheSync"))
 	}
 
 	return kss, nil
@@ -174,9 +194,30 @@ func (kss *KubeShareScheduler) Name() string {
 }
 
 // sort pods in the scheduling queue.
+// 1. compare the priorities of pods
+// 2. compare the initialization timestamps of PodGroups/Pods.
+// 3. compare the keys of PodGroups/Pods,
+//    i.e., if two pods are tied at priority and creation time, the one without podGroup will go ahead of the one with podGroup.
 func (kss *KubeShareScheduler) Less(podInfo1, podInfo2 *framework.PodInfo) bool {
 	kss.ksl.Debugf("[QueueSort] pod1: %v/%v(%v) v.s. pod2: %v/%v(%v)", podInfo1.Pod.Namespace, podInfo1.Pod.Name, podInfo1.Pod.UID, podInfo2.Pod.Namespace, podInfo2.Pod.Name, podInfo2.Pod.UID)
-	return true
+
+	pgInfo1 := kss.getOrCreatePodGroupInfo(podInfo1.Pod, podInfo1.InitialAttemptTimestamp)
+	pgInfo2 := kss.getOrCreatePodGroupInfo(podInfo2.Pod, podInfo2.InitialAttemptTimestamp)
+
+	priority1 := pgInfo1.priority
+	priority2 := pgInfo2.priority
+
+	if priority1 != priority2 {
+		return priority1 > priority2
+	}
+
+	time1 := pgInfo1.timestamp
+	time2 := pgInfo2.timestamp
+
+	if !time1.Equal(time2) {
+		return time1.Before(time2)
+	}
+	return pgInfo1.key < pgInfo2.key
 }
 
 func (kss *KubeShareScheduler) PreFilter(ctx context.Context, state *framework.CycleState, pod *v1.Pod) *framework.Status {
