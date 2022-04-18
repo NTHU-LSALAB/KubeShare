@@ -150,9 +150,9 @@ func New(config *runtime.Unknown, handle framework.FrameworkHandle) (framework.P
 		cache.FilteringResourceEventHandler{
 			FilterFunc: kss.isGPUNode,
 			Handler: cache.ResourceEventHandlerFuncs{
-				AddFunc: kss.addNode,
-				// UpdateFunc: kss.updateNode,
-				// DeleteFunc: kss.deleteNode,
+				AddFunc:    kss.addNode,
+				UpdateFunc: kss.updateNode,
+				DeleteFunc: kss.deleteNode,
 			},
 		},
 	)

@@ -26,7 +26,7 @@ func (kss *KubeShareScheduler) addNode(obj interface{}) {
 	node := kss.convertToNode(obj)
 	name := node.Name
 
-	kss.ksl.Infof("[New node Event] %v", name)
+	kss.ksl.Infof("[Event: ADD NODE] %v", name)
 
 	kss.getGPUByNode(name)
 
@@ -39,6 +39,31 @@ func (kss *KubeShareScheduler) addNode(obj interface{}) {
 		kss.setNodeStatus(name, false)
 	}
 
+}
+
+func (kss *KubeShareScheduler) updateNode(oldObj, newObj interface{}) {
+	//oldNode := kss.convertToNode(oldObj)
+	newNode := kss.convertToNode(newObj)
+	name := newNode.Name
+	kss.ksl.Infof("[Event: UPDATE NODE] %v", name)
+	kss.cellMutex.Lock()
+	defer kss.cellMutex.Unlock()
+
+	if isNodeHealth(newNode) {
+		kss.setNodehealthy(name, true)
+	} else {
+		kss.setNodehealthy(name, false)
+	}
+}
+
+func (kss *KubeShareScheduler) deleteNode(obj interface{}) {
+	node := kss.convertToNode(obj)
+	name := node.Name
+	kss.ksl.Infof("[Event: DELETE NODE] %v", name)
+
+	kss.cellMutex.Lock()
+	defer kss.cellMutex.Unlock()
+	kss.setNodehealthy(name, false)
 }
 
 func (kss *KubeShareScheduler) convertToNode(obj interface{}) *v1.Node {
@@ -69,7 +94,7 @@ func isNodeHealth(node *v1.Node) bool {
 	return false
 }
 
-// marks a node and the cells in it as healthy or bad
+// set the cell status according to the specified node status
 func (kss *KubeShareScheduler) setNodeStatus(nodeName string, healthy bool) {
 	kss.ksl.Debugf("setNodeStatus: %v, %v", nodeName, healthy)
 
@@ -80,10 +105,9 @@ func (kss *KubeShareScheduler) setNodeStatus(nodeName string, healthy bool) {
 			}
 		}
 	}
-
 }
 
-//TODO: set uuid
+// set the cell health, uuid, memory
 func (kss *KubeShareScheduler) setCellStatus(cell *Cell, healthy bool, nodeName string) {
 	// get the gpu information of node & cell type
 	GPUs := kss.gpuInfos[nodeName][cell.leafCellType]
@@ -124,6 +148,58 @@ func (kss *KubeShareScheduler) setCellStatus(cell *Cell, healthy bool, nodeName 
 				idx++
 				kss.ksl.Debugf("Level 1: %+v", current)
 			}
+
+			parent := current.parent
+			if parent != nil && parent.healthy != healthy {
+				kss.ksl.Debugf("Parent: %+v", parent)
+				s.Push(parent)
+			}
+			child := current.child
+			if child == nil {
+				continue
+			}
+			for i := range child {
+
+				node = child[i].node
+				if (node == nodeName || node == "") && child[i].healthy != healthy {
+					kss.ksl.Debugf("Child: %+v", child[i])
+					s.Push(child[i])
+				}
+			}
+		}
+	}
+}
+
+// set the cell healthy according to the specified node status
+func (kss *KubeShareScheduler) setNodehealthy(nodeName string, healthy bool) {
+	kss.ksl.Debugf("setNodehealthy: %v, %v", nodeName, healthy)
+	for _, freeList := range kss.cellFreeList {
+		for _, cellList := range freeList {
+			for _, cell := range cellList {
+				kss.setCellHealthy(cell, healthy, nodeName)
+			}
+		}
+	}
+}
+
+// set the cell health
+func (kss *KubeShareScheduler) setCellHealthy(cell *Cell, healthy bool, nodeName string) {
+
+	s := stack.NewStack()
+	s.Push(cell)
+
+	for s.Len() > 0 {
+		current := s.Pop().(*Cell)
+
+		kss.ksl.Debugf("Cell: %+v", current)
+
+		if current.healthy == healthy {
+			continue
+		}
+
+		node := current.node
+		if node == nodeName || node == "" {
+			current.healthy = healthy
 
 			parent := current.parent
 			if parent != nil && parent.healthy != healthy {
