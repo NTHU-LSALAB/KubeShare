@@ -42,7 +42,7 @@ type PodGroupInfo struct {
 	timestamp time.Time
 	// the minimum number of pods to be co-scheduled in a PodGroup
 	// all pods in the same PodGroup should have same minAvailable
-	minAvailable int32
+	minAvailable int
 	// stores the timestamp when the PodGroup marked as expired.
 	deletionTimestamp *time.Time
 }
@@ -65,7 +65,7 @@ func (kss *KubeShareScheduler) getOrCreatePodGroupInfo(pod *v1.Pod, ts time.Time
 	// If it is a PodGroup and present in PodGroupInfos, return it.
 	if len(pgKey) != 0 {
 
-		pgInfo, exist := kss.podGroupInfos[pgKey]
+		pgInfo, exist := kss.podGroupInfos[podGroupName]
 		if exist {
 			// If the deleteTimestamp isn't nil,
 			// it means that the PodGroup is marked as expired before.
@@ -90,7 +90,7 @@ func (kss *KubeShareScheduler) getOrCreatePodGroupInfo(pod *v1.Pod, ts time.Time
 	}
 	// If it's not a regular Pod, store the PodGroup in PodGroupInfos
 	if len(pgKey) > 0 {
-		kss.podGroupInfos[pgKey] = pgInfo
+		kss.podGroupInfos[podGroupName] = pgInfo
 	}
 	return pgInfo
 }
@@ -98,7 +98,7 @@ func (kss *KubeShareScheduler) getOrCreatePodGroupInfo(pod *v1.Pod, ts time.Time
 // checks if the pod belongs to a PodGroup.
 // If so,  it will return the podGroupName, minAvailable and priority of the PodGroup.
 // If not, it will return "" and 0.
-func (kss *KubeShareScheduler) getPodGroupLabels(pod *v1.Pod) (string, int32) {
+func (kss *KubeShareScheduler) getPodGroupLabels(pod *v1.Pod) (string, int) {
 	podGroupName, ok := pod.Labels[PodGroupName]
 	if !ok || len(podGroupName) == 0 {
 		return "", 0
@@ -108,11 +108,11 @@ func (kss *KubeShareScheduler) getPodGroupLabels(pod *v1.Pod) (string, int32) {
 		return "", 0
 	}
 
-	miniNum, err := strconv.ParseInt(minAvailable, 10, 32)
+	miniNum, err := strconv.Atoi(minAvailable)
 	if err != nil || miniNum < 1 {
 		kss.ksl.Error(fmt.Sprintf("PodGroup %v/%v : PodGroupMinAvailable %v is invalid", pod.Namespace, pod.Name, minAvailable))
 		return "", 0
 	}
 
-	return podGroupName, int32(miniNum)
+	return podGroupName, miniNum
 }

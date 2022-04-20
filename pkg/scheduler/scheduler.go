@@ -17,6 +17,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	corev1 "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	framework "k8s.io/kubernetes/pkg/scheduler/framework/v1alpha1"
 	schedulernodeinfo "k8s.io/kubernetes/pkg/scheduler/nodeinfo"
@@ -62,10 +63,11 @@ type Args struct {
 
 type KubeShareScheduler struct {
 	// parameters of scheduler
-	args     *Args
-	handle   framework.FrameworkHandle
-	promeAPI promeV1.API
-	ksl      *logrus.Logger
+	args      *Args
+	handle    framework.FrameworkHandle
+	podLister corev1.PodLister
+	promeAPI  promeV1.API
+	ksl       *logrus.Logger
 
 	// allocation
 	gpuPriority       map[string]int32 // key: model name ; val: priority
@@ -113,10 +115,12 @@ func New(config *runtime.Unknown, handle framework.FrameworkHandle) (framework.P
 
 	promeAPI := promeV1.NewAPI(client)
 
+	podLister := handle.SharedInformerFactory().Core().V1().Pods().Lister()
 	kss := &KubeShareScheduler{
 		args:           args,
 		handle:         handle,
 		promeAPI:       promeAPI,
+		podLister:      podLister,
 		gpuPriority:    map[string]int32{},
 		gpuInfos:       map[string]map[string][]GPU{},
 		cellMutex:      &sync.RWMutex{},
@@ -236,6 +240,51 @@ func (kss *KubeShareScheduler) Less(podInfo1, podInfo2 *framework.PodInfo) bool 
 // It will reduce the overall scheduling time for the whole group.
 func (kss *KubeShareScheduler) PreFilter(ctx context.Context, state *framework.CycleState, pod *v1.Pod) *framework.Status {
 	kss.ksl.Infof("[PreFilter] pod: %v/%v(%v) in node %v", pod.Namespace, pod.Name, pod.UID, pod.Spec.NodeName)
+
+	errorMsg, _, ps := kss.getPodLabels(pod)
+
+	// check the labels of a pod is set correctly
+	if errorMsg != "" {
+		return framework.NewStatus(framework.Unschedulable, errorMsg)
+	}
+
+	kss.printPodStatus(ps)
+
+	pgInfo := kss.getOrCreatePodGroupInfo(pod, time.Now())
+	pgKey := pgInfo.key
+
+	// check if the pod is regular pod or not
+	if len(pgKey) == 0 {
+		return framework.NewStatus(framework.Success, "regular pod")
+	}
+
+	// check if the minAvailables of pods in same pod group are the same
+	pgGroupName, pgMinAvailable := pgInfo.name, pgInfo.minAvailable
+	_, podMinAvailable := kss.getPodGroupLabels(pod)
+
+	if podMinAvailable != pgMinAvailable {
+		msg := fmt.Sprintf("Pod %v/%v(%v) has a different minAvailable (%v) as the PodGroup %v (%v)", pod.Namespace, pod.Name, pod.UID, podMinAvailable, pgGroupName, pgMinAvailable)
+		kss.ksl.Errorf(msg)
+		return framework.NewStatus(framework.Unschedulable, msg)
+	}
+
+	// check if the priorities of pods in same pod group are the same
+	pgPriority := pgInfo.priority
+	_, _, podPriority := kss.getPodPrioriy(pod)
+
+	if podPriority != pgPriority {
+		msg := fmt.Sprintf("Pod %v/%v(%v) has a different priority (%v) as the PodGroup %v (%v)", pod.Namespace, pod.Name, pod.UID, podPriority, pgGroupName, pgPriority)
+		kss.ksl.Errorf(msg)
+		return framework.NewStatus(framework.Unschedulable, msg)
+	}
+
+	// check if the total pods are less than min available of pod group
+	totalPods := kss.caculateTotalPods(pod.Namespace, pgGroupName)
+	if totalPods < pgMinAvailable {
+		msg := fmt.Sprintf("The count of PodGroup %v (%v) is less than minAvailable(%v) in PreFilter: %d", pgKey, pod.Name, pgMinAvailable, totalPods)
+		kss.ksl.Warnf(msg)
+		return framework.NewStatus(framework.Unschedulable, msg)
+	}
 
 	return framework.NewStatus(framework.Success, "")
 }

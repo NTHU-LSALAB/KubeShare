@@ -3,10 +3,10 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: pod6
+  name: pod7
   labels:
     "sharedgpu/gpu_request": "2"
-    "sharedgpu/gpu_limit": "2"
+    "sharedgpu/gpu_limit": "2.5"
     #"sharedgpu/gpu_mem": "3073741824"
     #    "sharedgpu/group_name": "nv"
     #"sharedgpu/min_available": "2"

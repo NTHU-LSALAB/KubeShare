@@ -30,7 +30,7 @@ type PodStatus struct {
 	port         int32
 	nodeName     string
 	podGroup     string
-	minAvailable int32
+	minAvailable int
 }
 
 func (kss *KubeShareScheduler) addPod(obj interface{}) {
@@ -84,7 +84,7 @@ func isBound(pod *v1.Pod) bool {
 }
 
 // there are 2 types of pods based on priority
-// 1. guarantee pod: 1 - 1000
+// 1. guarantee pod: 1 - 100
 // 2. opportunistic pod: -1
 // Be careful, the default priority is -1(opportunistic pod)
 func (kss *KubeShareScheduler) getPodPrioriy(pod *v1.Pod) (string, bool, int32) {
@@ -163,7 +163,7 @@ func (kss *KubeShareScheduler) getPodLabels(pod *v1.Pod) (string, bool, *PodStat
 
 	limit, err := strconv.ParseFloat(formatLimit, 64)
 	if err != nil || limit < 0.0 {
-		msg := fmt.Sprintf("Pod %v/%v: %v converted error", namespace, name, PodGPULimit)
+		msg := fmt.Sprintf("Pod %v/%v: %v converted error, %v", namespace, name, PodGPULimit, err)
 		kss.ksl.Errorf(msg)
 		return msg, false, nil
 	}
@@ -172,11 +172,12 @@ func (kss *KubeShareScheduler) getPodLabels(pod *v1.Pod) (string, bool, *PodStat
 
 	if okRequest {
 		formatRequest := valueFormat.FindString(labelRequest)
+		kss.ksl.Debugf("Pod %v/%v: format limit %v, format request %v", namespace, name, formatLimit, formatRequest)
 		request, err = strconv.ParseFloat(labelRequest, 64)
-		if err != nil || len(formatRequest) == len(labelRequest) ||
+		if err != nil || len(formatRequest) != len(labelRequest) ||
 			request < 0.0 || (limit > 1.0 && limit != request) ||
 			request > limit {
-			msg := fmt.Sprintf("Pod %v/%v: %v set or converted error", namespace, name, PodGPURequest)
+			msg := fmt.Sprintf("Pod %v/%v: %v set or converted error, %v", namespace, name, PodGPURequest, err)
 			kss.ksl.Errorf(msg)
 			return msg, false, nil
 		}
@@ -193,7 +194,7 @@ func (kss *KubeShareScheduler) getPodLabels(pod *v1.Pod) (string, bool, *PodStat
 	if okMemory {
 		memory, err = strconv.ParseInt(labelMemory, 10, 64)
 		if err != nil || memory < 0 {
-			msg := fmt.Sprintf("Pod %v/%v: %v set or converted error", namespace, name, PodGPUMemory)
+			msg := fmt.Sprintf("Pod %v/%v: %v set or converted error, %v", namespace, name, PodGPUMemory, err)
 			kss.ksl.Errorf(msg)
 			return msg, false, nil
 		}

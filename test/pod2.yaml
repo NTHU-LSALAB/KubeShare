@@ -1,11 +1,11 @@
 # Test: 
-#    gpu_request and gpu_limit correct
+#    pod group and its min_available
 apiVersion: v1
 kind: Pod
 metadata:
   name: pod2
   labels:
-    "sharedgpu/gpu_request": "0.3"
+    "sharedgpu/gpu_request": "1.0"
     "sharedgpu/gpu_limit": "1.0"
     #"sharedgpu/gpu_mem": "3073741824"
     "sharedgpu/group_name": "nv"
