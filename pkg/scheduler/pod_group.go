@@ -6,7 +6,7 @@ import (
 	"time"
 
 	v1 "k8s.io/api/core/v1"
-	podutil "k8s.io/kubernetes/pkg/api/v1/pod"
+	//podutil "k8s.io/kubernetes/pkg/api/v1/pod"
 )
 
 const (
@@ -15,8 +15,17 @@ const (
 	PodGroupName = domain + "group_name"
 	// the minimum number of pods to be scheduled together in a pod group.
 	PodGroupMinAvailable = domain + "min_available"
-
+	// the priority of pod
+	// Note: pod in the same PodGroup should have same priority.
 	PodPriority = domain + "priority"
+	// the upper limit percentage of time over the past sample period that one or more kernels of the pod are executed on the GPU
+	PodGPULimit = domain + "gpu_limit"
+	// the minimum request percentage of time over the past sample period that one or more kernels of the pod are executed on the GPU
+	PodGPURequest = domain + "gpu_request"
+	// the gpu memory request (in Byte)
+	PodGPUMemory = domain + "gpu_mem"
+	// the gpu model request
+	PodGPUModel = domain + "gpu_model"
 )
 
 type PodGroupInfo struct {
@@ -33,7 +42,7 @@ type PodGroupInfo struct {
 	timestamp time.Time
 	// the minimum number of pods to be co-scheduled in a PodGroup
 	// all pods in the same PodGroup should have same minAvailable
-	minAvailable int
+	minAvailable int32
 	// stores the timestamp when the PodGroup marked as expired.
 	deletionTimestamp *time.Time
 }
@@ -69,12 +78,13 @@ func (kss *KubeShareScheduler) getOrCreatePodGroupInfo(pod *v1.Pod, ts time.Time
 		}
 	}
 
+	_, _, priority := kss.getPodPrioriy(pod)
 	// If the PodGroup is not present in PodGroupInfos or the pod is a regular pod,
 	// create a PodGroup for the Pod and store it in PodGroupInfos.
 	pgInfo := &PodGroupInfo{
 		key:          pgKey,
 		name:         podGroupName,
-		priority:     podutil.GetPodPriority(pod) + kss.getPodPrioriy(pod),
+		priority:     priority, // podutil.GetPodPriority(pod) + kss.getPodPrioriy(pod)
 		timestamp:    ts,
 		minAvailable: podMinAvailable,
 	}
@@ -88,8 +98,7 @@ func (kss *KubeShareScheduler) getOrCreatePodGroupInfo(pod *v1.Pod, ts time.Time
 // checks if the pod belongs to a PodGroup.
 // If so,  it will return the podGroupName, minAvailable and priority of the PodGroup.
 // If not, it will return "" and 0.
-
-func (kss *KubeShareScheduler) getPodGroupLabels(pod *v1.Pod) (string, int) {
+func (kss *KubeShareScheduler) getPodGroupLabels(pod *v1.Pod) (string, int32) {
 	podGroupName, ok := pod.Labels[PodGroupName]
 	if !ok || len(podGroupName) == 0 {
 		return "", 0
@@ -99,27 +108,11 @@ func (kss *KubeShareScheduler) getPodGroupLabels(pod *v1.Pod) (string, int) {
 		return "", 0
 	}
 
-	miniNum, err := strconv.Atoi(minAvailable)
+	miniNum, err := strconv.ParseInt(minAvailable, 10, 32)
 	if err != nil || miniNum < 1 {
 		kss.ksl.Error(fmt.Sprintf("PodGroup %v/%v : PodGroupMinAvailable %v is invalid", pod.Namespace, pod.Name, minAvailable))
 		return "", 0
 	}
 
-	return podGroupName, miniNum
-}
-
-// Be careful, the default priority is 1
-func (kss *KubeShareScheduler) getPodPrioriy(pod *v1.Pod) int32 {
-
-	priority, ok := pod.Labels[PodPriority]
-	if !ok || len(priority) == 0 {
-		return 1
-	}
-
-	p, err := strconv.Atoi(priority)
-	if err != nil || p < 1 {
-		kss.ksl.Error(fmt.Sprintf("Pod %v/%v : Priority %v is invalid", pod.Namespace, pod.Name, priority))
-	}
-
-	return int32(p)
+	return podGroupName, int32(miniNum)
 }

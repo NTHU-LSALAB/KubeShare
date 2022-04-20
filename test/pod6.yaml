@@ -3,7 +3,7 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: pod2
+  name: pod6
   labels:
     "sharedgpu/gpu_request": "0.3"
     "sharedgpu/gpu_limit": "1.0"
@@ -14,7 +14,7 @@ spec:
   schedulerName: kubeshare-scheduler
   containers:
     - name: pytorch
-      image:  pytorch_1.15_gpu_gemini_2.0:latest
+      image:  riyazhu/mnist:20220420
       imagePullPolicy: IfNotPresent
       resources:
         limits:

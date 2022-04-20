@@ -13,13 +13,15 @@ import (
 	"github.com/prometheus/client_golang/api"
 	promeV1 "github.com/prometheus/client_golang/api/prometheus/v1"
 
-	// KubeShare
+	// kubernetes
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/cache"
 	framework "k8s.io/kubernetes/pkg/scheduler/framework/v1alpha1"
 	schedulernodeinfo "k8s.io/kubernetes/pkg/scheduler/nodeinfo"
 
+	// KubeShare
 	"KubeShare/pkg/logger"
 	"KubeShare/pkg/signals"
 )
@@ -77,6 +79,10 @@ type KubeShareScheduler struct {
 	// key: <namespace>/<PodGroup name> ; value: *PodGroupInfo.
 	podGroupInfos map[string]*PodGroupInfo
 	podGroupMutex *sync.RWMutex
+
+	// pod status
+	podStatus      map[string]*PodStatus // key: namespace/name ; value: pod status
+	podStatusMutex *sync.RWMutex
 }
 
 // initializes a new plugin and returns it
@@ -98,7 +104,7 @@ func New(config *runtime.Unknown, handle framework.FrameworkHandle) (framework.P
 
 	// prometheus
 	client, err := api.NewClient(api.Config{
-		Address: *&args.prometheusURL,
+		Address: args.prometheusURL,
 	})
 	if err != nil {
 		ksl.Printf("Error creating client: %v\n", err)
@@ -108,15 +114,17 @@ func New(config *runtime.Unknown, handle framework.FrameworkHandle) (framework.P
 	promeAPI := promeV1.NewAPI(client)
 
 	kss := &KubeShareScheduler{
-		args:          args,
-		handle:        handle,
-		promeAPI:      promeAPI,
-		gpuPriority:   map[string]int32{},
-		gpuInfos:      map[string]map[string][]GPU{},
-		cellMutex:     &sync.RWMutex{},
-		podGroupInfos: map[string]*PodGroupInfo{},
-		podGroupMutex: &sync.RWMutex{},
-		ksl:           ksl,
+		args:           args,
+		handle:         handle,
+		promeAPI:       promeAPI,
+		gpuPriority:    map[string]int32{},
+		gpuInfos:       map[string]map[string][]GPU{},
+		cellMutex:      &sync.RWMutex{},
+		podGroupInfos:  map[string]*PodGroupInfo{},
+		podGroupMutex:  &sync.RWMutex{},
+		podStatus:      map[string]*PodStatus{},
+		podStatusMutex: &sync.RWMutex{},
+		ksl:            ksl,
 	}
 	// gpu topology
 	kubeshareConfig := kss.initRawConfig()
@@ -220,8 +228,15 @@ func (kss *KubeShareScheduler) Less(podInfo1, podInfo2 *framework.PodInfo) bool 
 	return pgInfo1.key < pgInfo2.key
 }
 
+// performs the following validations.
+// 1. validate if the gpu information `gpu_limit`, `gpu_request`, `gpu_mem` set correct
+// 2. validate if the minAvailables and Priorities of all the pods in a PodGroup are the same
+// 3. validate if  the total number of pods belonging to the same `PodGroup` is less than `miniAvailable`
+// If so, the scheduling process will be interrupted directly to avoid the partial Pods and hold the system resources until timeout.
+// It will reduce the overall scheduling time for the whole group.
 func (kss *KubeShareScheduler) PreFilter(ctx context.Context, state *framework.CycleState, pod *v1.Pod) *framework.Status {
 	kss.ksl.Infof("[PreFilter] pod: %v/%v(%v) in node %v", pod.Namespace, pod.Name, pod.UID, pod.Spec.NodeName)
+
 	return framework.NewStatus(framework.Success, "")
 }
 
@@ -247,6 +262,31 @@ func (kss *KubeShareScheduler) ScoreExtensions() framework.ScoreExtensions {
 
 func (kss *KubeShareScheduler) Reserve(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodeName string) *framework.Status {
 	kss.ksl.Infof("[Reserve] pod: %v/%v(%v) in node %v", pod.Namespace, pod.Name, pod.UID, pod.Spec.NodeName)
+
+	podCopy := pod.DeepCopy()
+	if podCopy.Annotations == nil {
+		podCopy.Annotations = make(map[string]string)
+	}
+	podCopy.Annotations["sharedpod/test"] = nodeName
+	podCopy, err := kss.handle.ClientSet().CoreV1().Pods(podCopy.Namespace).Update(ctx, podCopy, metav1.UpdateOptions{})
+	if err != nil {
+		kss.ksl.Errorf("The Pod %v/%v updated fail", pod.Namespace, pod.Name)
+	}
+	kss.ksl.Infof("[Reserve-> Update] pod: %v/%v(%v) in node %v", podCopy.Namespace, podCopy.Name, podCopy.UID, pod.Spec.NodeName)
+
+	err = kss.handle.ClientSet().CoreV1().Pods(podCopy.Namespace).Delete(ctx, podCopy.Name, metav1.DeleteOptions{})
+	if err != nil {
+		kss.ksl.Debugf("Dummy Pod %v was deleted", pod.Name)
+	}
+	kss.ksl.Infof("[Reserve-> Delete] pod: %v/%v(%v) in node %v", podCopy.Namespace, podCopy.Name, podCopy.UID, pod.Spec.NodeName)
+	podCopy.ResourceVersion = ""
+	podCopy.Spec.NodeName = "juno"
+	podCopy, err = kss.handle.ClientSet().CoreV1().Pods(podCopy.Namespace).Create(ctx, podCopy, metav1.CreateOptions{})
+	if err != nil {
+		kss.ksl.Errorf("Pod %v recreate error: %v", podCopy.Name, err)
+	}
+	kss.ksl.Infof("[Reserve-> Create] pod: %v/%v(%v) in node %v", podCopy.Namespace, podCopy.Name, podCopy.UID, pod.Spec.NodeName)
+
 	return framework.NewStatus(framework.Success, "")
 }
 

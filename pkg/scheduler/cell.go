@@ -134,7 +134,7 @@ type Cell struct {
 	leafCellNumber float64
 	freeMemory     int64
 	fullMemory     int64
-	allocation     float64
+	available      float64
 	node           string
 
 	healthy bool
@@ -163,7 +163,7 @@ func NewCell(
 		uuid:               "",
 		freeMemory:         0,
 		fullMemory:         0,
-		allocation:         0.0,
+		available:          leafCellNumber,
 		leafCellType:       leafCellType,
 		leafCellNumber:     leafCellNumber,
 		healthy:            false,
@@ -252,6 +252,7 @@ func (c *cellConstructor) buildChildCell(
 	}
 
 	if ce.level == 1 {
+		c.ksl.Debugf("%+v", cellInstance)
 		return cellInstance
 	}
 
@@ -263,11 +264,12 @@ func (c *cellConstructor) buildChildCell(
 			childCellInstance.node = currentNode
 		}
 		currentCellChildren = append(currentCellChildren, childCellInstance)
-		c.ksl.Debugf("%+v", childCellInstance)
+		// c.ksl.Debugf("%+v", childCellInstance)
 	}
 
 	// update current cell children and resource
 	cellInstance.child = currentCellChildren
+	c.ksl.Debugf("%+v", cellInstance)
 
 	return cellInstance
 }
