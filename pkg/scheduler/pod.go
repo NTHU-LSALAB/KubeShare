@@ -128,6 +128,25 @@ func (kss *KubeShareScheduler) getPodLabels(pod *v1.Pod) (string, bool, *PodStat
 		return "", true, ps
 	}
 
+	ps = &PodStatus{
+		namespace: namespace,
+		name:      name,
+		uid:       uid,
+		nodeName:  pod.Spec.NodeName,
+	}
+
+	// get the pod group and min available infomation  and store in pod status
+	ps.podGroup, ps.minAvailable = kss.getPodGroupLabels(pod)
+
+	// get the priority and store in pod status
+	// if ok equal to false,
+	// it means the setting of priority is error
+	msg, ok, priority := kss.getPodPrioriy(pod)
+	if !ok {
+		return msg, false, ps
+	}
+	ps.priority = priority
+
 	// get label of pod that assigned by user
 	labelLimit, okLimit := pod.Labels[PodGPULimit]
 	labelRequest, okRequest := pod.Labels[PodGPURequest]
@@ -135,7 +154,7 @@ func (kss *KubeShareScheduler) getPodLabels(pod *v1.Pod) (string, bool, *PodStat
 
 	// regular pod
 	if !okLimit && !okRequest && !okMemory {
-		return "", false, nil
+		return "", false, ps
 	}
 
 	// check if the limit & request correct or not
@@ -158,14 +177,14 @@ func (kss *KubeShareScheduler) getPodLabels(pod *v1.Pod) (string, bool, *PodStat
 	if !okLimit || len(formatLimit) != len(labelLimit) {
 		msg := fmt.Sprintf("Pod %v/%v: %v set error by user", namespace, name, PodGPULimit)
 		kss.ksl.Errorf(msg)
-		return msg, false, nil
+		return msg, false, ps
 	}
 
 	limit, err := strconv.ParseFloat(formatLimit, 64)
 	if err != nil || limit < 0.0 {
 		msg := fmt.Sprintf("Pod %v/%v: %v converted error, %v", namespace, name, PodGPULimit, err)
 		kss.ksl.Errorf(msg)
-		return msg, false, nil
+		return msg, false, ps
 	}
 
 	request := 0.0
@@ -177,9 +196,15 @@ func (kss *KubeShareScheduler) getPodLabels(pod *v1.Pod) (string, bool, *PodStat
 		if err != nil || len(formatRequest) != len(labelRequest) ||
 			request < 0.0 || (limit > 1.0 && limit != request) ||
 			request > limit {
+			// kss.ksl.Debugf("err != nil: %v", err != nil)
+			// kss.ksl.Debugf("len(formatRequest) != len(labelRequest): %v", len(formatRequest) == len(labelRequest))
+			// kss.ksl.Debugf("request < 0.0: %v", request < 0.0)
+			// kss.ksl.Debugf("limit > 1.0 && limit != request: %v", (limit > 1.0 && limit != request))
+			// kss.ksl.Debugf("request > limit: %v", request > limit)
+
 			msg := fmt.Sprintf("Pod %v/%v: %v set or converted error, %v", namespace, name, PodGPURequest, err)
 			kss.ksl.Errorf(msg)
-			return msg, false, nil
+			return msg, false, ps
 		}
 	}
 
@@ -187,7 +212,7 @@ func (kss *KubeShareScheduler) getPodLabels(pod *v1.Pod) (string, bool, *PodStat
 	// it means a pod doesn't need gpu resource in fact.
 	// -> regular pod
 	if limit == 0.0 && request == 0.0 {
-		return "", false, nil
+		return "", false, ps
 	}
 
 	memory := int64(0)
@@ -196,35 +221,16 @@ func (kss *KubeShareScheduler) getPodLabels(pod *v1.Pod) (string, bool, *PodStat
 		if err != nil || memory < 0 {
 			msg := fmt.Sprintf("Pod %v/%v: %v set or converted error, %v", namespace, name, PodGPUMemory, err)
 			kss.ksl.Errorf(msg)
-			return msg, false, nil
+			return msg, false, ps
 		}
 	}
 
-	msg, ok, priority := kss.getPodPrioriy(pod)
-	if !ok {
-		return msg, false, nil
-	}
+	model := pod.Labels[PodGPUModel]
 
-	podGroupName, podMinAvailable := kss.getPodGroupLabels(pod)
-
-	model, _ := pod.Labels[PodGPUModel]
-
-	ps = &PodStatus{
-		namespace: namespace,
-		name:      name,
-		uid:       uid,
-		limit:     limit,
-		request:   request,
-		memory:    memory,
-		priority:  priority,
-		model:     model,
-		// uuid:         "",
-		// cellID:       "",
-		// port:         0,
-		nodeName:     pod.Spec.NodeName,
-		podGroup:     podGroupName,
-		minAvailable: podMinAvailable,
-	}
+	ps.limit = limit
+	ps.request = request
+	ps.memory = memory
+	ps.model = model
 
 	kss.podStatus[key] = ps
 	return "", true, ps

@@ -7,6 +7,7 @@ import (
 
 func (kss *KubeShareScheduler) printPodStatus(ps *PodStatus) {
 	if ps == nil {
+		kss.ksl.Debugf("No pod status when get labels")
 		return
 	}
 

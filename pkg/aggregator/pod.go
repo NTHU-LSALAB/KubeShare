@@ -51,14 +51,16 @@ func (a *Aggregator) getPods() []*PodInfo {
 
 	pods := runningPods.Items
 
-	n := len(pods)
-	podInfos := make([]*PodInfo, n)
+	// n := len(pods)
+	//podInfos := make([]*PodInfo, n)
 
-	for i, pod := range pods {
+	podInfos := []*PodInfo{}
+	for _, pod := range pods {
 		p := processPod(&pod)
 
 		if p != nil {
-			podInfos[i] = p
+			// podInfos[i] = p
+			podInfos = append(podInfos, p)
 		}
 	}
 

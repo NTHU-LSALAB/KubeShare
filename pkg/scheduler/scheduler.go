@@ -260,7 +260,7 @@ func (kss *KubeShareScheduler) PreFilter(ctx context.Context, state *framework.C
 
 	// check if the minAvailables of pods in same pod group are the same
 	pgGroupName, pgMinAvailable := pgInfo.name, pgInfo.minAvailable
-	_, podMinAvailable := kss.getPodGroupLabels(pod)
+	podMinAvailable := ps.minAvailable
 
 	if podMinAvailable != pgMinAvailable {
 		msg := fmt.Sprintf("Pod %v/%v(%v) has a different minAvailable (%v) as the PodGroup %v (%v)", pod.Namespace, pod.Name, pod.UID, podMinAvailable, pgGroupName, pgMinAvailable)
@@ -270,7 +270,7 @@ func (kss *KubeShareScheduler) PreFilter(ctx context.Context, state *framework.C
 
 	// check if the priorities of pods in same pod group are the same
 	pgPriority := pgInfo.priority
-	_, _, podPriority := kss.getPodPrioriy(pod)
+	podPriority := ps.priority
 
 	if podPriority != pgPriority {
 		msg := fmt.Sprintf("Pod %v/%v(%v) has a different priority (%v) as the PodGroup %v (%v)", pod.Namespace, pod.Name, pod.UID, podPriority, pgGroupName, pgPriority)
@@ -294,13 +294,63 @@ func (kss *KubeShareScheduler) PreFilterExtensions() framework.PreFilterExtensio
 	return nil
 }
 
+// filter the node that doesn't meet the gpu requirements.
 func (kss *KubeShareScheduler) Filter(ctx context.Context, state *framework.CycleState, pod *v1.Pod, node *schedulernodeinfo.NodeInfo) *framework.Status {
-	kss.ksl.Infof("[Filter] pod: %v/%v(%v) in node %v", pod.Namespace, pod.Name, pod.UID, pod.Spec.NodeName)
-	return framework.NewStatus(framework.Success, "")
+
+	nodeName := node.Node().Name
+
+	kss.ksl.Infof("[Filter] pod: %v/%v(%v) in node %v", pod.Namespace, pod.Name, pod.UID, nodeName)
+
+	_, needGPU, ps := kss.getPodLabels(pod)
+
+	// the pod does not need gpu, so we do not need to filter
+	if !needGPU {
+		return framework.NewStatus(framework.Success, "regular pod")
+	}
+
+	gpuModelInfos := kss.gpuInfos[nodeName]
+	model := ps.model
+	assignedGPU := false
+	if model != "" {
+		assignedGPU = true
+	}
+
+	// check if the node has the specified gpu or not
+	if assignedGPU {
+		if _, ok := gpuModelInfos[model]; !ok {
+			msg := fmt.Sprintf("Node %v doesn't meet the gpu request of pod %v/%v(%v) in Filter", nodeName, pod.Namespace, pod.Name, pod.UID)
+			kss.ksl.Warnf(msg)
+			return framework.NewStatus(framework.Unschedulable, msg)
+		}
+	}
+
+	// filter
+	request := ps.request
+	memory := ps.memory
+	ok := false
+	available := 0.0
+	freeMemory := int64(0)
+	for model := range gpuModelInfos {
+
+		fit, currentAvailable, currentMemory := kss.filterNode(nodeName, model, request, memory)
+		available += currentAvailable
+		freeMemory += currentMemory
+		if ok = ok || fit; ok || (available >= request && freeMemory >= memory) {
+			kss.ksl.Infof("Node %v meet the gpu requirement of pod %v/%v(%v) in Filter", nodeName, pod.Namespace, pod.Name, pod.UID)
+			return framework.NewStatus(framework.Success, "")
+		}
+	}
+	msg := fmt.Sprintf("Node %v doesn't meet the gpu request of pod %v/%v(%v) in Filter", nodeName, pod.Namespace, pod.Name, pod.UID)
+	kss.ksl.Infof(msg)
+	return framework.NewStatus(framework.Unschedulable, msg)
 }
 
+// regular pod:
+// 	if the node without gpu will get highest score
+//
 func (kss *KubeShareScheduler) Score(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodeName string) (int64, *framework.Status) {
 	kss.ksl.Infof("[Score] pod: %v/%v(%v) in node %v", pod.Namespace, pod.Name, pod.UID, nodeName)
+
 	return 0, framework.NewStatus(framework.Success, "")
 }
 
