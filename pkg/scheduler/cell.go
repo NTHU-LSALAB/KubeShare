@@ -130,12 +130,13 @@ type Cell struct {
 	priority int32
 	uuid     string
 
-	leafCellType   string
-	leafCellNumber float64
-	freeMemory     int64
-	fullMemory     int64
-	available      float64
-	node           string
+	leafCellType       string
+	leafCellNumber     float64
+	availableWholeCell float64 // a number of whole cells are available
+	freeMemory         int64
+	fullMemory         int64
+	available          float64 // remaining gpu resource
+	node               string
 
 	healthy bool
 	state   CellState
@@ -164,6 +165,7 @@ func NewCell(
 		freeMemory:         0,
 		fullMemory:         0,
 		available:          leafCellNumber,
+		availableWholeCell: leafCellNumber,
 		leafCellType:       leafCellType,
 		leafCellNumber:     leafCellNumber,
 		healthy:            false,

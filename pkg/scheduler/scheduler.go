@@ -23,6 +23,7 @@ import (
 	schedulernodeinfo "k8s.io/kubernetes/pkg/scheduler/nodeinfo"
 
 	// KubeShare
+	"KubeShare/pkg/lib/bitmap"
 	"KubeShare/pkg/logger"
 	"KubeShare/pkg/signals"
 )
@@ -77,6 +78,8 @@ type KubeShareScheduler struct {
 	cellElements      map[string]*cellElement
 	cellMutex         *sync.RWMutex
 
+	nodePodManagerPortBitmap      map[string]*bitmap.RRBitmap
+	nodePodManagerPortBitmapMutex *sync.Mutex
 	// pod group
 	// key: <namespace>/<PodGroup name> ; value: *PodGroupInfo.
 	podGroupInfos map[string]*PodGroupInfo
@@ -117,18 +120,20 @@ func New(config *runtime.Unknown, handle framework.FrameworkHandle) (framework.P
 
 	podLister := handle.SharedInformerFactory().Core().V1().Pods().Lister()
 	kss := &KubeShareScheduler{
-		args:           args,
-		handle:         handle,
-		promeAPI:       promeAPI,
-		podLister:      podLister,
-		gpuPriority:    map[string]int32{},
-		gpuInfos:       map[string]map[string][]GPU{},
-		cellMutex:      &sync.RWMutex{},
-		podGroupInfos:  map[string]*PodGroupInfo{},
-		podGroupMutex:  &sync.RWMutex{},
-		podStatus:      map[string]*PodStatus{},
-		podStatusMutex: &sync.RWMutex{},
-		ksl:            ksl,
+		args:                          args,
+		handle:                        handle,
+		promeAPI:                      promeAPI,
+		podLister:                     podLister,
+		gpuPriority:                   map[string]int32{},
+		gpuInfos:                      map[string]map[string][]GPU{},
+		cellMutex:                     &sync.RWMutex{},
+		nodePodManagerPortBitmap:      map[string]*bitmap.RRBitmap{},
+		nodePodManagerPortBitmapMutex: &sync.Mutex{},
+		podGroupInfos:                 map[string]*PodGroupInfo{},
+		podGroupMutex:                 &sync.RWMutex{},
+		podStatus:                     map[string]*PodStatus{},
+		podStatusMutex:                &sync.RWMutex{},
+		ksl:                           ksl,
 	}
 	// gpu topology
 	kubeshareConfig := kss.initRawConfig()
@@ -305,8 +310,21 @@ func (kss *KubeShareScheduler) Filter(ctx context.Context, state *framework.Cycl
 
 	// the pod does not need gpu, so we do not need to filter
 	if !needGPU {
-		return framework.NewStatus(framework.Success, "regular pod")
+		return framework.NewStatus(framework.Success, "")
 	}
+
+	// check if the port in the node is sufficient
+	port := kss.nodePodManagerPortBitmap[nodeName].FindNextFromCurrentAndSet() + PodManagerPortStart
+	kss.ksl.Debugf("[Filter] Port: %v", port)
+	if port == -1 {
+		msg := fmt.Sprintf("Node %v pod manager port pool is full!", nodeName)
+		kss.ksl.Warnf(msg)
+		return framework.NewStatus(framework.Unschedulable, msg)
+	}
+
+	// get the gpu requirement of the pod
+	request := ps.request
+	memory := ps.memory
 
 	gpuModelInfos := kss.gpuInfos[nodeName]
 	model := ps.model
@@ -317,16 +335,27 @@ func (kss *KubeShareScheduler) Filter(ctx context.Context, state *framework.Cycl
 
 	// check if the node has the specified gpu or not
 	if assignedGPU {
+		kss.ksl.Infof("[Filter] Pod %v/%v(%v) specified gpu %v", pod.Namespace, pod.Name, pod.UID, model)
 		if _, ok := gpuModelInfos[model]; !ok {
-			msg := fmt.Sprintf("Node %v doesn't meet the gpu request of pod %v/%v(%v) in Filter", nodeName, pod.Namespace, pod.Name, pod.UID)
+			msg := fmt.Sprintf("[Filter] Node %v without the specified gpu %v of pod %v/%v(%v)", nodeName, model, pod.Namespace, pod.Name, pod.UID)
 			kss.ksl.Warnf(msg)
 			return framework.NewStatus(framework.Unschedulable, msg)
 		}
+
+		// check the specified gpu has sufficient gpu resource
+		fit, _, _ := kss.filterNode(nodeName, model, request, memory)
+		if fit {
+			kss.ksl.Infof("[Filter] Node %v meet the gpu requirement of pod %v/%v(%v)", nodeName, pod.Namespace, pod.Name, pod.UID)
+			return framework.NewStatus(framework.Success, "")
+		} else {
+			msg := fmt.Sprintf("[Filter] Node %v doesn't meet the gpu request of pod %v/%v(%v)", nodeName, pod.Namespace, pod.Name, pod.UID)
+			kss.ksl.Infof(msg)
+			return framework.NewStatus(framework.Unschedulable, msg)
+		}
+
 	}
 
-	// filter
-	request := ps.request
-	memory := ps.memory
+	// filter the node according to its gpu resource
 	ok := false
 	available := 0.0
 	freeMemory := int64(0)
@@ -345,17 +374,59 @@ func (kss *KubeShareScheduler) Filter(ctx context.Context, state *framework.Cycl
 	return framework.NewStatus(framework.Unschedulable, msg)
 }
 
-// regular pod:
-// 	if the node without gpu will get highest score
+// 1. pod not need gpu:
+// 		if the node without gpu will set score to 100,
+//  	otherwise, 0
+// 2. opportunistic pod:
+//
+// 3. guarantee pod:
 //
 func (kss *KubeShareScheduler) Score(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodeName string) (int64, *framework.Status) {
 	kss.ksl.Infof("[Score] pod: %v/%v(%v) in node %v", pod.Namespace, pod.Name, pod.UID, nodeName)
 
-	return 0, framework.NewStatus(framework.Success, "")
+	_, needGPU, ps := kss.getPodLabels(pod)
+	// the pod does not need gpu
+	if !needGPU {
+		return kss.calculateRegularPodNodeScore(nodeName), framework.NewStatus(framework.Success, "")
+	}
+
+	podPriority := ps.priority
+
+	score := int64(podPriority)
+	if podPriority <= 0 {
+
+	} else {
+
+	}
+
+	return score, framework.NewStatus(framework.Success, "")
 }
 
 func (kss *KubeShareScheduler) ScoreExtensions() framework.ScoreExtensions {
+
 	kss.ksl.Infof("[ScoreExtensions]")
+	return kss
+}
+
+func (kss *KubeShareScheduler) NormalizeScore(ctx context.Context, state *framework.CycleState, pod *v1.Pod, scores framework.NodeScoreList) *framework.Status {
+	kss.ksl.Infof("[NormalizeScore] pod: %v/%v(%v)", pod.Namespace, pod.Name, pod.UID)
+
+	// maxScore := int64(0)
+	// for i := range scores {
+	// 	if scores[i].Score > maxScore {
+	// 		maxScore = scores[i].Score
+	// 	}
+	// }
+	// if maxScore == 0 {
+	// 	maxScore = framework.MaxNodeScore
+	// }
+	// for i, node := range scores {
+	// 	name := scores[i].Name
+	// 	kss.ksl.Debugf("Before Score %v: %v", name, scores[i].Score)
+	// 	scores[i].Score = framework.MaxNodeScore - (node.Score * framework.MaxNodeScore / maxScore)
+	// 	kss.ksl.Debugf("After Score %v: %v", name, scores[i].Score)
+	// }
+
 	return nil
 }
 

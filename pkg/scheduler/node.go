@@ -1,6 +1,8 @@
 package scheduler
 
 import (
+	"KubeShare/pkg/lib/bitmap"
+
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/cache"
 	// "KubeShare/pkg/lib/stack"
@@ -8,6 +10,8 @@ import (
 
 const (
 	NodeLabelFilter = "SharedGPU"
+	// the start port of pod manager
+	PodManagerPortStart = 50050
 )
 
 // filter the node without label
@@ -26,6 +30,12 @@ func (kss *KubeShareScheduler) addNode(obj interface{}) {
 	name := node.Name
 
 	kss.ksl.Infof("[ADD NODE] %v", name)
+
+	kss.nodePodManagerPortBitmapMutex.Lock()
+	defer kss.nodePodManagerPortBitmapMutex.Unlock()
+
+	kss.nodePodManagerPortBitmap[name] = bitmap.NewRRBitmap(512)
+	kss.nodePodManagerPortBitmap[name].Mask(0)
 
 	kss.getGPUByNode(name)
 
@@ -221,84 +231,4 @@ func (kss *KubeShareScheduler) setCellHealthy(cell *Cell, healthy bool, nodeName
 
 	}
 
-}
-
-func (kss *KubeShareScheduler) filterNode(nodeName, model string, request float64, memory int64) (bool, float64, int64) {
-	kss.ksl.Debugf("filterNode: node %v with gpu model %v", nodeName, model)
-
-	ok := false
-	available := 0.0
-	freeMemory := int64(0)
-	freeList := kss.cellFreeList[model]
-	for _, cellList := range freeList {
-		for _, cell := range cellList {
-			fit, currentAvailable, currentMemory := kss.checkCellResource(cell, nodeName, request, memory)
-			ok = ok || fit
-			available += currentAvailable
-			freeMemory += currentMemory
-
-			if ok {
-				return ok, available, freeMemory
-			}
-		}
-	}
-
-	return ok, available, freeMemory
-}
-
-func (kss *KubeShareScheduler) checkCellResource(cell *Cell, nodeName string, request float64, memory int64) (bool, float64, int64) {
-	s := NewStack()
-
-	node := cell.node
-	// this cell does not need to check
-	if node != nodeName && node != "" {
-		return false, 0.0, 0
-	}
-
-	if node == "" || cell.healthy {
-		s.Push(cell)
-	}
-
-	// store the number of whole gpu
-	available := 0.0
-	freeMemory := int64(0)
-	multiGPU := request > 1.0
-
-	for s.Len() > 0 {
-		current := s.Pop()
-		kss.ksl.Debugf("Check resource cell: %+v", current)
-
-		if current.level == 1 {
-
-			if multiGPU {
-				if current.available == 1.0 {
-					available += 1.0
-					freeMemory += current.freeMemory
-
-					if available >= request && freeMemory >= memory {
-						return true, available, freeMemory
-					}
-				}
-			} else {
-				if current.available >= request && current.freeMemory >= memory {
-					return true, current.available, current.freeMemory
-				}
-			}
-
-		}
-
-		child := current.child
-		if child == nil {
-			continue
-		}
-
-		for i := range child {
-			node := child[i].node
-			if (node == nodeName || node == "") && child[i].healthy {
-				kss.ksl.Debugf("Check resource child: %+v", child[i])
-				s.Push(child[i])
-			}
-		}
-	}
-	return false, available, freeMemory
 }

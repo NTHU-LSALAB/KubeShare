@@ -85,25 +85,25 @@ func isBound(pod *v1.Pod) bool {
 
 // there are 2 types of pods based on priority
 // 1. guarantee pod: 1 - 100
-// 2. opportunistic pod: -1
-// Be careful, the default priority is -1(opportunistic pod)
+// 2. opportunistic pod: 0
+// Be careful, the default priority is 0 (opportunistic pod)
 func (kss *KubeShareScheduler) getPodPrioriy(pod *v1.Pod) (string, bool, int32) {
 
 	msg := ""
 	priority, ok := pod.Labels[PodPriority]
 
 	if !ok || len(priority) == 0 {
-		msg = fmt.Sprintf("Pod %v/%v: %v is set to -1 and conveted opportunistic pod by default", pod.Namespace, pod.Name, PodPriority)
+		msg = fmt.Sprintf("Pod %v/%v: %v is set to 0 and conveted opportunistic pod by default", pod.Namespace, pod.Name, PodPriority)
 		kss.ksl.Warnf(msg)
-		return msg, true, -1
+		return msg, true, 0
 	}
 
 	p, err := strconv.Atoi(priority)
 
-	if err != nil || p == 0 || p > 1000 || p < -1 {
+	if err != nil || p > 100 || p < -1 {
 		msg = fmt.Sprintf("Pod %v/%v: %v set error by user", pod.Namespace, pod.Name, PodPriority)
 		kss.ksl.Errorf(msg)
-		return msg, false, -1
+		return msg, false, 0
 	}
 
 	return "", true, int32(p)
