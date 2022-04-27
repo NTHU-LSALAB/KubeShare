@@ -24,13 +24,14 @@ type PodStatus struct {
 	model    string
 	priority int32
 
-	uuid   string // gpu uuid
-	cellID string // cell id
-
-	port         int32
-	nodeName     string
-	podGroup     string
-	minAvailable int
+	uuid          string   // gpu uuid
+	cellID        []string // cell id
+	assignedModel []string
+	score         []int64
+	port          int32
+	nodeName      string
+	podGroup      string
+	minAvailable  int
 }
 
 func (kss *KubeShareScheduler) addPod(obj interface{}) {
@@ -231,6 +232,9 @@ func (kss *KubeShareScheduler) getPodLabels(pod *v1.Pod) (string, bool, *PodStat
 	ps.request = request
 	ps.memory = memory
 	ps.model = model
+	ps.cellID = []string{}
+	ps.score = []int64{}
+	ps.assignedModel = []string{}
 
 	kss.podStatus[key] = ps
 	return "", true, ps

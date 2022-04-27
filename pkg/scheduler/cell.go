@@ -22,6 +22,13 @@ const (
 	lowestLevel  int       = 1
 )
 
+func appendCellList(cl1, cl2 CellList) CellList {
+	for _, cell := range cl2 {
+		cl1 = append(cl1, cell)
+	}
+	return cl1
+}
+
 // internal structure to build the cell elements
 // preprocess the information about the cell
 type cellElement struct {

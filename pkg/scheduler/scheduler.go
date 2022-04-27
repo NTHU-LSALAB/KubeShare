@@ -390,15 +390,14 @@ func (kss *KubeShareScheduler) Score(ctx context.Context, state *framework.Cycle
 		return kss.calculateRegularPodNodeScore(nodeName), framework.NewStatus(framework.Success, "")
 	}
 
-	podPriority := ps.priority
-
-	score := int64(podPriority)
-	if podPriority <= 0 {
-
+	score := int64(0)
+	// opportunistic pod
+	if ps.priority <= 0 {
+		score = kss.calculateOpportunisticPodScore(nodeName, ps)
 	} else {
 
 	}
-
+	kss.ksl.Debugf("[Score] Score %v: %v", nodeName, score)
 	return score, framework.NewStatus(framework.Success, "")
 }
 
@@ -411,21 +410,22 @@ func (kss *KubeShareScheduler) ScoreExtensions() framework.ScoreExtensions {
 func (kss *KubeShareScheduler) NormalizeScore(ctx context.Context, state *framework.CycleState, pod *v1.Pod, scores framework.NodeScoreList) *framework.Status {
 	kss.ksl.Infof("[NormalizeScore] pod: %v/%v(%v)", pod.Namespace, pod.Name, pod.UID)
 
-	// maxScore := int64(0)
-	// for i := range scores {
-	// 	if scores[i].Score > maxScore {
-	// 		maxScore = scores[i].Score
-	// 	}
-	// }
-	// if maxScore == 0 {
-	// 	maxScore = framework.MaxNodeScore
-	// }
-	// for i, node := range scores {
-	// 	name := scores[i].Name
-	// 	kss.ksl.Debugf("Before Score %v: %v", name, scores[i].Score)
-	// 	scores[i].Score = framework.MaxNodeScore - (node.Score * framework.MaxNodeScore / maxScore)
-	// 	kss.ksl.Debugf("After Score %v: %v", name, scores[i].Score)
-	// }
+	maxScore := int64(0)
+	//minScore := int64(0)
+	for i := range scores {
+		if scores[i].Score > maxScore {
+			maxScore = scores[i].Score
+		}
+	}
+	if maxScore == 0 {
+		maxScore = framework.MaxNodeScore
+	}
+	for i, _ := range scores {
+		name := scores[i].Name
+		kss.ksl.Debugf("Before Score %v: %v", name, scores[i].Score)
+		scores[i].Score = 0 //framework.MaxNodeScore - (node.Score * framework.MaxNodeScore / maxScore)
+		kss.ksl.Debugf("After Score %v: %v", name, scores[i].Score)
+	}
 
 	return nil
 }
