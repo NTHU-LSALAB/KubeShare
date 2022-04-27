@@ -128,6 +128,7 @@ func (kss *KubeShareScheduler) setCellStatus(cell *Cell, healthy bool, nodeName 
 		return
 	}
 
+	childStack := NewStack()
 	s := NewStack()
 	s.Push(cell)
 
@@ -156,6 +157,9 @@ func (kss *KubeShareScheduler) setCellStatus(cell *Cell, healthy bool, nodeName 
 				current.freeMemory = current.fullMemory
 				idx++
 				kss.ksl.Debugf("Level 1: %+v", current)
+				if current.parent != nil {
+					childStack.Push(current)
+				}
 			}
 
 			parent := current.parent
@@ -175,8 +179,12 @@ func (kss *KubeShareScheduler) setCellStatus(cell *Cell, healthy bool, nodeName 
 					s.Push(child[i])
 				}
 			}
+
 		}
 	}
+
+	// pass child cells gpu memory to parent cells
+	kss.passMemoryToParent(childStack)
 }
 
 // set the cell healthy according to the specified node status
@@ -230,5 +238,29 @@ func (kss *KubeShareScheduler) setCellHealthy(cell *Cell, healthy bool, nodeName
 		}
 
 	}
+}
 
+// pass child cells gpu memory to parent cells
+func (kss *KubeShareScheduler) passMemoryToParent(s *Stack) {
+	kss.ksl.Debugf("[passMemoryToParent]")
+	for s.Len() > 0 {
+		childNum := s.Len()
+		memory := int64(0)
+
+		for i := 0; i < childNum; i++ {
+			child := s.Pop()
+			kss.ksl.Debugf("passMemoryToParent - child: %+v", child)
+			memory += child.fullMemory
+			if i == childNum-1 {
+				parent := child.parent
+				parent.freeMemory += memory
+				parent.fullMemory += memory
+				if parent.parent != nil {
+					s.Push(parent)
+				}
+				kss.ksl.Debugf("passMemoryToParent -parent: %+v", parent)
+			}
+		}
+
+	}
 }

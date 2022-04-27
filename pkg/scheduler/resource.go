@@ -40,6 +40,59 @@ func (kss *KubeShareScheduler) checkCellResource(cell *Cell, nodeName string, re
 		s.Push(cell)
 	}
 
+	multiGPU := request > 1.0
+
+	for s.Len() > 0 {
+		current := s.Pop()
+		kss.ksl.Debugf("Check resource cell: %+v", current)
+
+		if current.node == nodeName && current.healthy {
+			// only need whole gpu
+			if multiGPU {
+				availableWholeCell := current.availableWholeCell
+				freeMemory := current.freeMemory
+				if availableWholeCell >= request && freeMemory >= memory {
+					return true, availableWholeCell, freeMemory
+				} else {
+					return false, availableWholeCell, freeMemory
+				}
+			} else {
+				if current.level == 1 && current.available >= request && current.freeMemory >= memory {
+					return true, current.available, current.freeMemory
+				}
+			}
+		}
+
+		child := current.child
+		if child == nil {
+			continue
+		}
+
+		for i := range child {
+			node := child[i].node
+			if (node == nodeName || node == "") && child[i].healthy {
+				kss.ksl.Debugf("Check resource child: %+v", child[i])
+				s.Push(child[i])
+			}
+		}
+	}
+	return false, 0, 0
+}
+
+/*
+func (kss *KubeShareScheduler) checkCellResource(cell *Cell, nodeName string, request float64, memory int64) (bool, float64, int64) {
+	s := NewStack()
+
+	node := cell.node
+	// this cell does not need to check
+	if node != nodeName && node != "" {
+		return false, 0.0, 0
+	}
+
+	if node == "" || cell.healthy {
+		s.Push(cell)
+	}
+
 	// store the number of whole gpu
 	available := 0.0
 	freeMemory := int64(0)
@@ -83,7 +136,7 @@ func (kss *KubeShareScheduler) checkCellResource(cell *Cell, nodeName string, re
 	}
 	return false, available, freeMemory
 }
-
+*/
 /** Score **/
 
 // for regular pod
@@ -101,7 +154,7 @@ func (kss *KubeShareScheduler) calculateRegularPodNodeScore(nodeName string) int
 
 // for opportunistic pod
 
-func (kss *KubeShareScheduler) calculateOpportunisticPodNodeScore() (int64, string) {
+func (kss *KubeShareScheduler) calculateOpportunisticPodNodeScore(nodeName string) (int64, string) {
 
 	return 100, ""
 }
