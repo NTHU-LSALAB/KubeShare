@@ -3,6 +3,7 @@ package scheduler
 import (
 	"context"
 	"fmt"
+	"math"
 	"os"
 	"sync"
 	"time"
@@ -333,6 +334,8 @@ func (kss *KubeShareScheduler) Filter(ctx context.Context, state *framework.Cycl
 		assignedGPU = true
 	}
 
+	kss.cellMutex.RLock()
+	defer kss.cellMutex.RUnlock()
 	// check if the node has the specified gpu or not
 	if assignedGPU {
 		kss.ksl.Infof("[Filter] Pod %v/%v(%v) specified gpu %v", pod.Namespace, pod.Name, pod.UID, model)
@@ -390,6 +393,8 @@ func (kss *KubeShareScheduler) Score(ctx context.Context, state *framework.Cycle
 		return kss.calculateRegularPodNodeScore(nodeName), framework.NewStatus(framework.Success, "")
 	}
 
+	kss.cellMutex.RLock()
+	defer kss.cellMutex.RUnlock()
 	score := int64(0)
 	// opportunistic pod
 	if ps.priority <= 0 {
@@ -410,20 +415,43 @@ func (kss *KubeShareScheduler) ScoreExtensions() framework.ScoreExtensions {
 func (kss *KubeShareScheduler) NormalizeScore(ctx context.Context, state *framework.CycleState, pod *v1.Pod, scores framework.NodeScoreList) *framework.Status {
 	kss.ksl.Infof("[NormalizeScore] pod: %v/%v(%v)", pod.Namespace, pod.Name, pod.UID)
 
-	maxScore := int64(0)
-	//minScore := int64(0)
-	for i := range scores {
-		if scores[i].Score > maxScore {
-			maxScore = scores[i].Score
+	var maxScore int64 = math.MinInt64
+	var minScore int64 = math.MaxInt64
+
+	for _, node := range scores {
+		curScore := int64(node.Score)
+		if curScore > maxScore {
+			maxScore = curScore
+		}
+		if curScore < minScore {
+			minScore = curScore
 		}
 	}
-	if maxScore == 0 {
-		maxScore = framework.MaxNodeScore
+	if minScore < 0 {
+		reverse := -1 * minScore
+		kss.ksl.Debugf("[NormalizeScore] reverse: %v", reverse)
+		for i := range scores {
+			scores[i].Score += reverse
+			kss.ksl.Debugf("[NormalizeScore] reverse Score  %v: %v", scores[i].Name, scores[i].Score)
+		}
+		maxScore += reverse
+		minScore = 0
+
 	}
-	for i, _ := range scores {
+
+	if maxScore <= 100 && maxScore >= 0 && minScore <= 100 && minScore >= 0 {
+		return nil
+	}
+
+	ratio := maxScore - minScore
+	defaultRatio := framework.MaxNodeScore - framework.MinNodeScore
+	if ratio == 0 {
+		ratio = 100
+	}
+	for i, node := range scores {
 		name := scores[i].Name
 		kss.ksl.Debugf("Before Score %v: %v", name, scores[i].Score)
-		scores[i].Score = 0 //framework.MaxNodeScore - (node.Score * framework.MaxNodeScore / maxScore)
+		scores[i].Score = node.Score / ratio * defaultRatio
 		kss.ksl.Debugf("After Score %v: %v", name, scores[i].Score)
 	}
 
