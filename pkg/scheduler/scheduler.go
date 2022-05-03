@@ -395,12 +395,13 @@ func (kss *KubeShareScheduler) Score(ctx context.Context, state *framework.Cycle
 
 	kss.cellMutex.RLock()
 	defer kss.cellMutex.RUnlock()
+
 	score := int64(0)
 	// opportunistic pod
 	if ps.priority <= 0 {
 		score = kss.calculateOpportunisticPodScore(nodeName, ps)
 	} else {
-
+		score = kss.calulateGuaranteePodScore(nodeName, ps)
 	}
 	kss.ksl.Debugf("[Score] Score %v: %v", nodeName, score)
 	return score, framework.NewStatus(framework.Success, "")

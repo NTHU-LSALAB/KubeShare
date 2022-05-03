@@ -32,6 +32,7 @@ func NewAggregator(ksl *logrus.Logger, clientset kubernetes.Interface) *Aggregat
 				"limit",
 				"request",
 				"memory",
+				"cell_id",
 				"uuid",
 				"port"},
 			nil),
@@ -59,6 +60,7 @@ func (a *Aggregator) Collect(ch chan<- prometheus.Metric) {
 			pod.limit,
 			pod.request,
 			pod.memory,
+			pod.cellID,
 			pod.uuid,
 			pod.port)
 	}

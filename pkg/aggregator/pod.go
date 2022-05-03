@@ -27,6 +27,9 @@ var (
 	KubeShareResourceGPURequest = domain + "gpu_request"
 	// the gpu memory request (in Byte)
 	KubeShareResourceGPUMemory = domain + "gpu_mem"
+
+	// the binding cell id
+	KubeShareResourceCellID = domain + "cell_id"
 )
 
 type PodInfo struct {
@@ -39,6 +42,7 @@ type PodInfo struct {
 	limit        string
 	request      string
 	memory       string
+	cellID       string
 	uuid         string
 	port         string
 }
@@ -97,10 +101,15 @@ func processPod(pod *v1.Pod) *PodInfo {
 
 	memory, ok := pod.Labels[KubeShareResourceGPUMemory]
 	if !ok {
-		memory = "0"
+		memory, ok = pod.Annotations[KubeShareResourceGPUMemory]
+		if !ok {
+			memory = "0"
+		}
 	}
 
 	uuid, port := getGPUUUIDPort(pod)
+
+	cellID := pod.Annotations[KubeShareResourceCellID]
 
 	return &PodInfo{
 		namespace:    pod.ObjectMeta.Namespace,
@@ -112,6 +121,7 @@ func processPod(pod *v1.Pod) *PodInfo {
 		limit:        limit,
 		request:      request,
 		memory:       memory,
+		cellID:       cellID,
 		uuid:         uuid,
 		port:         port,
 	}

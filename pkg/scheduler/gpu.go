@@ -10,7 +10,8 @@ import (
 
 const (
 	// query metrics
-	GPU_CAPACITY = "gpu_capacity"
+	GPU_CAPACITY    = "gpu_capacity"
+	GPU_REQUIREMENT = "gpu_requirement"
 )
 
 type GPU struct {
