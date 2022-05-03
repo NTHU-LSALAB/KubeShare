@@ -3,6 +3,7 @@ package scheduler
 import (
 	"context"
 	"fmt"
+
 	"math"
 	"os"
 	"sync"
@@ -18,10 +19,12 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/wait"
 	corev1 "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	framework "k8s.io/kubernetes/pkg/scheduler/framework/v1alpha1"
 	schedulernodeinfo "k8s.io/kubernetes/pkg/scheduler/nodeinfo"
+	"k8s.io/kubernetes/pkg/scheduler/util"
 
 	// KubeShare
 	"KubeShare/pkg/lib/bitmap"
@@ -37,6 +40,10 @@ const (
 	logPath = "kubeshare-scheduler.log"
 	// the file storing physical gpu position
 	configPath = "/kubeshare/scheduler/kubeshare-config.yaml"
+
+	PermitWaitingTimeSeconds      = 10
+	PodGroupGCIntervalSeconds     = 30
+	PodGroupExpirationTimeSeconds = 600
 )
 
 var (
@@ -61,6 +68,14 @@ type Args struct {
 
 	// logger
 	level int64 `json:"level,omitempty"`
+
+	// PermitWaitingTime is the wait timeout in seconds.
+	PermitWaitingTimeSeconds int64 `json:"permitWaitingTimeSeconds"`
+	// PodGroupGCInterval is the period to run gc of PodGroup in seconds.
+	PodGroupGCIntervalSeconds int64 `json:"podGroupGCIntervalSeconds"`
+	// If the deleted PodGroup stays longer than the PodGroupExpirationTime,
+	// the PodGroup will be deleted from PodGroupInfos.
+	PodGroupExpirationTimeSeconds int64 `json:"podGroupExpirationTimeSeconds"`
 }
 
 type KubeShareScheduler struct {
@@ -76,8 +91,8 @@ type KubeShareScheduler struct {
 	sortGPUByPriority []string
 	gpuInfos          map[string]map[string][]GPU // key: node name  ; val: {model, all information of gpu in the node}
 	cellFreeList      map[string]LevelCellList
-	cellElements      map[string]*cellElement
 	cellMutex         *sync.RWMutex
+	leafCells         map[string]*Cell
 
 	nodePodManagerPortBitmap      map[string]*bitmap.RRBitmap
 	nodePodManagerPortBitmapMutex *sync.Mutex
@@ -85,7 +100,8 @@ type KubeShareScheduler struct {
 	// key: <namespace>/<PodGroup name> ; value: *PodGroupInfo.
 	podGroupInfos map[string]*PodGroupInfo
 	podGroupMutex *sync.RWMutex
-
+	// clock is used to get the current time.
+	clock util.Clock
 	// pod status
 	podStatus      map[string]*PodStatus // key: namespace/name ; value: pod status
 	podStatusMutex *sync.RWMutex
@@ -96,9 +112,12 @@ func New(config *runtime.Unknown, handle framework.FrameworkHandle) (framework.P
 
 	// defaulting argument
 	args := &Args{
-		level:           3, // the default level is debugging mode
-		prometheusURL:   "http://prometheus-k8s.monitoring:9090",
-		kubeShareConfig: configPath,
+		level:                         3, // the default level is debugging mode
+		prometheusURL:                 "http://prometheus-k8s.monitoring:9090",
+		kubeShareConfig:               configPath,
+		PermitWaitingTimeSeconds:      PermitWaitingTimeSeconds,
+		PodGroupGCIntervalSeconds:     PodGroupGCIntervalSeconds,
+		PodGroupExpirationTimeSeconds: PodGroupExpirationTimeSeconds,
 	}
 	// parse flag
 	if err := framework.DecodeInto(config, args); err != nil {
@@ -127,6 +146,7 @@ func New(config *runtime.Unknown, handle framework.FrameworkHandle) (framework.P
 		podLister:                     podLister,
 		gpuPriority:                   map[string]int32{},
 		gpuInfos:                      map[string]map[string][]GPU{},
+		leafCells:                     map[string]*Cell{},
 		cellMutex:                     &sync.RWMutex{},
 		nodePodManagerPortBitmap:      map[string]*bitmap.RRBitmap{},
 		nodePodManagerPortBitmapMutex: &sync.Mutex{},
@@ -135,6 +155,7 @@ func New(config *runtime.Unknown, handle framework.FrameworkHandle) (framework.P
 		podStatus:                     map[string]*PodStatus{},
 		podStatusMutex:                &sync.RWMutex{},
 		ksl:                           ksl,
+		clock:                         util.RealClock{},
 	}
 	// gpu topology
 	kubeshareConfig := kss.initRawConfig()
@@ -164,7 +185,6 @@ func New(config *runtime.Unknown, handle framework.FrameworkHandle) (framework.P
 		ksl.Debugf("%+v = %+v", k, v)
 	}
 
-	kss.cellElements = ce
 	kss.cellFreeList = cellFreeList
 
 	// try to comment the following two command before run TestPermit
@@ -203,6 +223,8 @@ func New(config *runtime.Unknown, handle framework.FrameworkHandle) (framework.P
 		podInformer.HasSynced) {
 		panic(fmt.Errorf("failed to WaitForCacheSync"))
 	}
+
+	go wait.Until(kss.podGroupInfoGC, time.Duration(kss.args.PodGroupGCIntervalSeconds)*time.Second, nil)
 
 	return kss, nil
 }
@@ -380,10 +402,8 @@ func (kss *KubeShareScheduler) Filter(ctx context.Context, state *framework.Cycl
 // 1. pod not need gpu:
 // 		if the node without gpu will set score to 100,
 //  	otherwise, 0
-// 2. opportunistic pod:
-//
-// 3. guarantee pod:
-//
+// 2. opportunistic pod
+// 3. guarantee pod
 func (kss *KubeShareScheduler) Score(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodeName string) (int64, *framework.Status) {
 	kss.ksl.Infof("[Score] pod: %v/%v(%v) in node %v", pod.Namespace, pod.Name, pod.UID, nodeName)
 
@@ -401,7 +421,7 @@ func (kss *KubeShareScheduler) Score(ctx context.Context, state *framework.Cycle
 	if ps.priority <= 0 {
 		score = kss.calculateOpportunisticPodScore(nodeName, ps)
 	} else {
-		score = kss.calulateGuaranteePodScore(nodeName, ps)
+		score = kss.calculateGuaranteePodScore(nodeName, ps)
 	}
 	kss.ksl.Debugf("[Score] Score %v: %v", nodeName, score)
 	return score, framework.NewStatus(framework.Success, "")
@@ -460,7 +480,7 @@ func (kss *KubeShareScheduler) NormalizeScore(ctx context.Context, state *framew
 }
 
 func (kss *KubeShareScheduler) Reserve(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodeName string) *framework.Status {
-	kss.ksl.Infof("[Reserve] pod: %v/%v(%v) in node %v", pod.Namespace, pod.Name, pod.UID, pod.Spec.NodeName)
+	kss.ksl.Infof("[Reserve] pod: %v/%v(%v) in node %v", pod.Namespace, pod.Name, pod.UID, nodeName)
 
 	podCopy := pod.DeepCopy()
 	if podCopy.Annotations == nil {
@@ -479,7 +499,7 @@ func (kss *KubeShareScheduler) Reserve(ctx context.Context, state *framework.Cyc
 	}
 	kss.ksl.Infof("[Reserve-> Delete] pod: %v/%v(%v) in node %v", podCopy.Namespace, podCopy.Name, podCopy.UID, pod.Spec.NodeName)
 	podCopy.ResourceVersion = ""
-	podCopy.Spec.NodeName = "juno"
+	podCopy.Spec.NodeName = nodeName
 	podCopy, err = kss.handle.ClientSet().CoreV1().Pods(podCopy.Namespace).Create(ctx, podCopy, metav1.CreateOptions{})
 	if err != nil {
 		kss.ksl.Errorf("Pod %v recreate error: %v", podCopy.Name, err)
@@ -489,11 +509,59 @@ func (kss *KubeShareScheduler) Reserve(ctx context.Context, state *framework.Cyc
 	return framework.NewStatus(framework.Success, "")
 }
 
+// rejects all other Pods in the PodGroup when one of the pods in the group times out.
 func (kss *KubeShareScheduler) Unreserve(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodeName string) {
-	kss.ksl.Infof("[UnReserve] pod: %v/%v(%v) in node %v", pod.Namespace, pod.Name, pod.UID, pod.Spec.NodeName)
+	kss.ksl.Infof("[UnReserve] pod: %v/%v(%v) in node %v", pod.Namespace, pod.Name, pod.UID, nodeName)
+
+	pgInfo := kss.getOrCreatePodGroupInfo(pod, time.Now())
+	if pgInfo == nil {
+		return
+	}
+
+	groupName := pgInfo.name
+	kss.handle.IterateOverWaitingPods(func(waitingPod framework.WaitingPod) {
+		if waitingPod.GetPod().Namespace == pod.Namespace && waitingPod.GetPod().Labels[PodGroupName] == groupName {
+			kss.ksl.Infof("Reject the pod %v/%v in Unreserve.", groupName, waitingPod.GetPod().Name)
+			waitingPod.Reject(kss.Name())
+		}
+	})
+
 }
 
 func (kss *KubeShareScheduler) Permit(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodeName string) (*framework.Status, time.Duration) {
-	kss.ksl.Infof("[Permit] pod: %v/%v(%v) in node %v", pod.Namespace, pod.Name, pod.UID, pod.Spec.NodeName)
+	kss.ksl.Infof("[Permit] pod: %v/%v(%v) in node %v", pod.Namespace, pod.Name, pod.UID, nodeName)
+
+	pgInfo := kss.getOrCreatePodGroupInfo(pod, time.Now())
+	if pgInfo == nil {
+		return framework.NewStatus(framework.Success, ""), 0
+	}
+
+	namespace := pod.Namespace
+	groupName := pgInfo.name
+	minAvailable := pgInfo.minAvailable
+	// bound includes both assigned and assumed Pods.
+	bound := kss.calculateBoundPods(groupName, namespace)
+	// bound is calculated from the snapshot.
+	// current pod does not exist in the snapshot during this scheduling cycle.
+	current := bound + 1
+
+	if current < minAvailable {
+		kss.ksl.Warnf("The count of podGroup %v/%v/%v is not up to minAvailable(%d) in Permit: current(%d)",
+			namespace, groupName, pod.Name, minAvailable, current)
+
+		// TODO Change the timeout to a dynamic value depending on the size of the  `PodGroup`
+		return framework.NewStatus(framework.Wait, ""), time.Duration(kss.args.PermitWaitingTimeSeconds) * time.Second
+	}
+
+	kss.ksl.Infof("The count of PodGroup %v/%v/%v is up to minAvailable(%d) in Permit: current(%d)",
+		namespace, groupName, pod.Name, minAvailable, current)
+
+	kss.handle.IterateOverWaitingPods(func(waitingPod framework.WaitingPod) {
+		if waitingPod.GetPod().Namespace == namespace && waitingPod.GetPod().Labels[PodGroupName] == groupName {
+			kss.ksl.Infof("Permit allows the pod: %v/%v", groupName, waitingPod.GetPod().Name)
+			waitingPod.Allow(kss.Name())
+		}
+	})
+
 	return framework.NewStatus(framework.Success, ""), 0
 }

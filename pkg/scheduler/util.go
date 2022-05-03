@@ -20,7 +20,7 @@ func (kss *KubeShareScheduler) printPodStatus(ps *PodStatus) {
 	kss.ksl.Debugf("\tModel:         %v", ps.model)
 	kss.ksl.Debugf("\tPriority:      %v", ps.priority)
 	kss.ksl.Debugf("\tUUDI:          %v", ps.uuid)
-	kss.ksl.Debugf("\tCellID:        %v", ps.cellID)
+	kss.ksl.Debugf("\tCells:        %+v", ps.cells)
 	kss.ksl.Debugf("\tPort:          %v", ps.port)
 	kss.ksl.Debugf("\tNode Name:     %v", ps.nodeName)
 	kss.ksl.Debugf("\tPod Group:     %v", ps.podGroup)

@@ -116,3 +116,18 @@ func (kss *KubeShareScheduler) getPodGroupLabels(pod *v1.Pod) (string, int) {
 
 	return podGroupName, miniNum
 }
+
+func (kss *KubeShareScheduler) podGroupInfoGC() {
+	kss.podGroupMutex.Lock()
+	defer kss.podGroupMutex.Unlock()
+
+	for key, pgInfo := range kss.podGroupInfos {
+		if pgInfo.deletionTimestamp != nil && pgInfo.deletionTimestamp.Add(time.Duration(kss.args.PodGroupExpirationTimeSeconds)*time.Second).Before(kss.clock.Now()) {
+
+			kss.ksl.Warn(key, " is out of date and has been deleted in PodGroup GarbegeCollection")
+			delete(kss.podGroupInfos, key)
+
+		}
+	}
+
+}

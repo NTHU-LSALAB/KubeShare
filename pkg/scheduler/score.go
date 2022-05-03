@@ -70,7 +70,7 @@ func (kss *KubeShareScheduler) calculateOpportunisticPodNodeScore(cellList CellL
 }
 
 /** for guarantee pod **/
-func (kss *KubeShareScheduler) calulateGuaranteePodScore(nodeName string, podStatus *PodStatus) int64 {
+func (kss *KubeShareScheduler) calculateGuaranteePodScore(nodeName string, podStatus *PodStatus) int64 {
 	model := podStatus.model
 	score := int64(0)
 	if model != "" {
