@@ -29,6 +29,19 @@ func (rrbm *RRBitmap) FindNextFromCurrentAndSet() int {
 	return -1
 }
 
+func (rrbm *RRBitmap) FindNextFromCurrent() int {
+	for i := rrbm.current; i < rrbm.current+rrbm.l; i++ {
+		ii := i
+		if i >= rrbm.l {
+			ii = i - rrbm.l
+		}
+		if !rrbm.bitmap.IsMasked(ii) {
+			return ii
+		}
+	}
+	return -1
+}
+
 func (rrbm *RRBitmap) Clear() {
 	rrbm.bitmap.Clear()
 	rrbm.current = 0

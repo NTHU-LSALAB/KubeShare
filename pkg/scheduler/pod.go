@@ -1,6 +1,7 @@
 package scheduler
 
 import (
+	"bytes"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -113,7 +114,7 @@ func (kss *KubeShareScheduler) getPodPrioriy(pod *v1.Pod) (string, bool, int32) 
 // there are 3 possible results:
 // 	1. the pod need gpu and it is set correct by user
 // 	2. the pod need gpu and it is set error by user
-// 	3. the pod doesn't need gpu -> regular pod
+// 	3. the pod does not need gpu -> regular pod
 func (kss *KubeShareScheduler) getPodLabels(pod *v1.Pod) (string, bool, *PodStatus) {
 	namespace := pod.Namespace
 	name := pod.Name
@@ -253,3 +254,82 @@ func (kss *KubeShareScheduler) deletePodRequest(pod *v1.Pod) {
 // func (kss *KubeShareScheduler) getPodDecision(pod *v1.Pod) {
 
 // }
+
+func (kss *KubeShareScheduler) newAssumedMultiGPUPod(pod *v1.Pod, nodeName string) *v1.Pod {
+	_, _, ps := kss.getPodLabels(pod)
+
+	cells := ps.cells
+
+	podCopy := pod.DeepCopy()
+	if podCopy.Annotations == nil {
+		podCopy.Annotations = make(map[string]string)
+	}
+
+	var cellIDs, uuids, models bytes.Buffer
+	totalMemory := int64(0)
+	for _, cell := range cells {
+		totalMemory += cell.freeMemory
+		kss.updateResource(cell, cell.available, cell.freeMemory)
+
+		cellIDs.WriteString(cell.id)
+		cellIDs.WriteString(",")
+		uuids.WriteString(cell.uuid)
+		uuids.WriteString(",")
+		models.WriteString(cell.cellType)
+		models.WriteString(",")
+	}
+
+	podCopy.Annotations[PodCellID] = cellIDs.String()
+	podCopy.Annotations[PodGPUMemory] = strconv.FormatInt(totalMemory, 10)
+
+	model := models.String()
+	podCopy.Annotations[PodGPUModel] = model
+	ps.model = model
+
+	uuid := uuids.String()
+	podCopy.Annotations[PodGPUUUID] = uuid
+	ps.uuid = uuid
+	podCopy.ResourceVersion = ""
+	podCopy.Spec.NodeName = nodeName
+	ps.nodeName = nodeName
+
+	for i := range podCopy.Spec.Containers {
+		c := &podCopy.Spec.Containers[i]
+		c.Env = append(c.Env,
+			v1.EnvVar{
+				Name:  "NVIDIA_VISIBLE_DEVICES",
+				Value: uuid,
+			},
+			v1.EnvVar{
+				Name:  "NVIDIA_DRIVER_CAPABILITIES",
+				Value: "compute,utility",
+			})
+	}
+
+	return podCopy
+}
+
+func (kss *KubeShareScheduler) updateResource(cell *Cell, request float64, memory int64) {
+	kss.ksl.Debugf("==============TEST UPDATE================")
+	kss.cellMutex.Lock()
+	defer kss.cellMutex.Unlock()
+
+	s := NewStack()
+	s.Push(cell)
+
+	//set := map[string]bool{}
+	for s.Len() > 0 {
+		current := s.Pop()
+		current.freeMemory -= memory
+		current.available -= request
+		// set[current.id] = true
+		if request == 1.0 {
+			current.availableWholeCell--
+		}
+		kss.ksl.Debugf("[updateResource] cell : %+v", current)
+		if current.parent != nil { //&& !set[cell.parent.id] {
+			s.Push(current.parent)
+			kss.ksl.Debugf("[updateResource] parent cell %v:%+v", current.parent.cellType, current.parent)
+		}
+	}
+}

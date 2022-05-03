@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"context"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -29,7 +30,6 @@ func (kss *KubeShareScheduler) calculateOpportunisticPodScore(nodeName string, p
 	score := int64(0)
 	// assigned gpu model
 	if model != "" {
-
 		score = kss.calculateOpportunisticPodNodeScore(kss.getModelLeafCellbyNode(nodeName, model))
 
 	} else {
@@ -111,7 +111,7 @@ func (kss *KubeShareScheduler) calculateGuaranteePodNodeScore(cellList CellList,
 			locality += dis
 			kss.ksl.Debugf("distance %v <-> %v: %v", cell.id, stringID[i], dis)
 		}
-		score += int64(locality / nGroup)
+		score -= int64(locality / nGroup)
 	}
 	return score / int64(len(cellList))
 }
@@ -151,7 +151,7 @@ func (kss *KubeShareScheduler) getCellIDFromPodGroup(podGroup string) []string {
 }
 
 func (kss *KubeShareScheduler) parseCellID(id string) int {
-	idList := strings.Split(id, "\\")
+	idList := strings.Split(id, "/")
 	nID := len(idList)
 	last := idList[nID-1]
 
@@ -178,7 +178,7 @@ func (kss *KubeShareScheduler) getModelLeafCellbyNode(nodeName, model string) Ce
 	freeList := kss.cellFreeList[model]
 	for _, cellList := range freeList {
 		for _, cell := range cellList {
-			cl = appendCellList(cl, kss.getLeafCellbyNode(cell, nodeName))
+			cl = append(cl, kss.getLeafCellbyNode(cell, nodeName)...)
 		}
 	}
 	return cl
@@ -191,7 +191,7 @@ func (kss *KubeShareScheduler) getAllLeafCellbyNode(nodeName string) CellList {
 	for _, freeList := range kss.cellFreeList {
 		for _, cellList := range freeList {
 			for _, cell := range cellList {
-				cl = appendCellList(cl, kss.getLeafCellbyNode(cell, nodeName))
+				cl = append(cl, kss.getLeafCellbyNode(cell, nodeName)...)
 			}
 		}
 	}
@@ -217,7 +217,7 @@ func (kss *KubeShareScheduler) getLeafCellbyNode(cell *Cell, nodeName string) Ce
 	for s.Len() > 0 {
 		current := s.Pop()
 		if current.level == 1 {
-			kss.ksl.Debugf("getLeafCellbyNode: %+v", current)
+			kss.ksl.Debugf("[getLeafCellbyNode] %v => %+v", nodeName, current)
 			cellList = append(cellList, current)
 		}
 
@@ -236,4 +236,155 @@ func (kss *KubeShareScheduler) getLeafCellbyNode(cell *Cell, nodeName string) Ce
 		}
 	}
 	return cellList
+}
+
+/*for Reserve*/
+func (kss *KubeShareScheduler) calculateOpportunisticPodCellScore(nodeName string, podStatus *PodStatus) CellList {
+	model := podStatus.model
+	// get cell list
+	var cellList CellList
+
+	finalList := CellList{}
+
+	request := podStatus.request
+	memory := podStatus.memory
+	multiGPU := request > 1.0
+
+	type CellScore struct {
+		cell  *Cell
+		score int32
+	}
+	scores := []*CellScore{}
+
+	if model != "" {
+		cellList = kss.getModelLeafCellbyNode(nodeName, model)
+	} else {
+		cellList = kss.getAllLeafCellbyNode(nodeName)
+	}
+
+	if multiGPU {
+		for _, cell := range cellList {
+			if cell.available == 1 {
+				scores = append(scores, &CellScore{cell: cell, score: cell.priority})
+			}
+		}
+	} else {
+		for _, cell := range cellList {
+			score := cell.priority + int32((1-cell.available)*100)
+			scores = append(scores, &CellScore{cell: cell, score: score})
+		}
+	}
+
+	sort.Slice(scores, func(p, q int) bool {
+		return scores[p].score > scores[q].score
+	})
+
+	for _, cs := range scores {
+		cell := cs.cell
+		if multiGPU {
+			finalList = append(finalList, cell)
+			request -= 1.0
+		} else {
+			if cell.available > request && cell.freeMemory > memory {
+				finalList = append(finalList, cell)
+				request = 0
+			}
+		}
+
+		if request == 0 {
+			break
+		}
+	}
+	return finalList
+}
+
+func (kss *KubeShareScheduler) calculateGuaranteePodCellScore(nodeName string, podStatus *PodStatus) CellList {
+	model := podStatus.model
+	// get cell list
+	var cellList CellList
+
+	finalList := CellList{}
+
+	request := podStatus.request
+	memory := podStatus.memory
+	multiGPU := request > 1.0
+
+	type CellScore struct {
+		cell  *Cell
+		score int32
+	}
+	scores := []*CellScore{}
+
+	if model != "" {
+		cellList = kss.getModelLeafCellbyNode(nodeName, model)
+	} else {
+		cellList = kss.getAllLeafCellbyNode(nodeName)
+	}
+
+	stringID := kss.getCellIDFromPodGroup(podStatus.podGroup)
+	cellIDList := kss.convertCellID(stringID)
+	nGroup := len(cellIDList)
+
+	if multiGPU {
+		for _, cell := range cellList {
+			if cell.available == 1 {
+				score := cell.priority
+				if nGroup > 0 {
+					locality := 0
+					currentId := kss.parseCellID(cell.id)
+					for i, id := range cellIDList {
+						dis := id - currentId
+						if dis < 0 {
+							dis *= -1
+						}
+						locality += dis
+						kss.ksl.Debugf("[Cell] distance %v <-> %v: %v", cell.id, stringID[i], dis)
+					}
+					score -= int32(locality / nGroup)
+				}
+				scores = append(scores, &CellScore{cell: cell, score: score})
+			}
+		}
+	} else {
+		for _, cell := range cellList {
+			score := cell.priority - int32((1-cell.available)*100)
+			if nGroup > 0 {
+				locality := 0
+				currentId := kss.parseCellID(cell.id)
+				for i, id := range cellIDList {
+					dis := id - currentId
+					if dis < 0 {
+						dis *= -1
+					}
+					locality += dis
+					kss.ksl.Debugf("[Cell] distance %v <-> %v: %v", cell.id, stringID[i], dis)
+				}
+				score -= int32(locality / nGroup)
+			}
+			scores = append(scores, &CellScore{cell: cell, score: score})
+		}
+	}
+
+	sort.Slice(scores, func(p, q int) bool {
+		return scores[p].score > scores[q].score
+	})
+
+	for _, cs := range scores {
+		cell := cs.cell
+		if multiGPU {
+			finalList = append(finalList, cell)
+			request -= 1.0
+		} else {
+			if cell.available > request && cell.freeMemory > memory {
+				finalList = append(finalList, cell)
+				request = 0
+			}
+		}
+
+		if request == 0 {
+			break
+		}
+	}
+	return finalList
+
 }

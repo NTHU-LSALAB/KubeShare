@@ -1,0 +1,22 @@
+# Test: 
+#    gpu_request and gpu_limit correct
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nv1
+  labels:
+    "sharedgpu/gpu_request": "2.0"
+    "sharedgpu/gpu_limit": "2.0"
+    #"sharedgpu/gpu_mem": "3073741824"
+    #"sharedgpu/group_name": "nv"
+    #"sharedgpu/min_available": "2"
+spec:
+        #  schedulerName: kubeshare-scheduler
+  containers:
+    - name: pytorch
+      image:  pytorch_1.15_gpu_gemini_2.0:latest
+      imagePullPolicy: IfNotPresent
+      resources:
+        limits:
+          cpu: "1"
+          memory: "4Gi"

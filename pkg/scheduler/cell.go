@@ -23,9 +23,10 @@ const (
 )
 
 func appendCellList(cl1, cl2 CellList) CellList {
-	for _, cell := range cl2 {
-		cl1 = append(cl1, cell)
-	}
+	// for _, cell := range cl2 {
+	// 	cl1 = append(cl1, cell)
+	// }
+	cl1 = append(cl1, cl2...)
 	return cl1
 }
 
@@ -195,6 +196,7 @@ type cellConstructor struct {
 
 	// output
 	cellFreeList map[string]LevelCellList
+	leafCells    map[string]*Cell
 
 	// logger
 	ksl *logrus.Logger
@@ -205,11 +207,12 @@ func newCellConstructor(cellElements map[string]*cellElement, cells []CellSpec, 
 		cellElements: cellElements,
 		cells:        cells,
 		cellFreeList: map[string]LevelCellList{},
+		leafCells:    map[string]*Cell{},
 		ksl:          ksl,
 	}
 }
 
-func (c *cellConstructor) build() (cellFreeList map[string]LevelCellList) {
+func (c *cellConstructor) build() (cellFreeList map[string]LevelCellList, leafCells map[string]*Cell) {
 	for _, spec := range c.cells {
 
 		rootCell := c.buildFullTree(spec.CellType, spec)
@@ -223,7 +226,7 @@ func (c *cellConstructor) build() (cellFreeList map[string]LevelCellList) {
 		c.cellFreeList[cellType][cellLevel] = append(
 			c.cellFreeList[cellType][cellLevel], rootCell)
 	}
-	return c.cellFreeList
+	return c.cellFreeList, c.leafCells
 }
 
 func (c *cellConstructor) buildFullTree(buildingType string, buildingSpec CellSpec) *Cell {
@@ -262,6 +265,7 @@ func (c *cellConstructor) buildChildCell(
 
 	if ce.level == 1 {
 		c.ksl.Debugf("%+v", cellInstance)
+		c.leafCells[cellInstance.id] = cellInstance
 		return cellInstance
 	}
 

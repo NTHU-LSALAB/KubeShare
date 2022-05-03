@@ -146,7 +146,6 @@ func New(config *runtime.Unknown, handle framework.FrameworkHandle) (framework.P
 		podLister:                     podLister,
 		gpuPriority:                   map[string]int32{},
 		gpuInfos:                      map[string]map[string][]GPU{},
-		leafCells:                     map[string]*Cell{},
 		cellMutex:                     &sync.RWMutex{},
 		nodePodManagerPortBitmap:      map[string]*bitmap.RRBitmap{},
 		nodePodManagerPortBitmapMutex: &sync.Mutex{},
@@ -169,7 +168,7 @@ func New(config *runtime.Unknown, handle framework.FrameworkHandle) (framework.P
 	// 	ksl.Debugf("%+v = %+v", k, v)
 	// }
 	// ksl.Debugln("=================FREE CELL=================")
-	cellFreeList := newCellConstructor(ce, kubeshareConfig.Cells, ksl).build()
+	cellFreeList, leafCells := newCellConstructor(ce, kubeshareConfig.Cells, ksl).build()
 	// for k, v := range cellFreeList {
 	// 	ksl.Debugf("%+v = ", k)
 	// 	for l, cl := range v {
@@ -186,6 +185,9 @@ func New(config *runtime.Unknown, handle framework.FrameworkHandle) (framework.P
 	}
 
 	kss.cellFreeList = cellFreeList
+	kss.leafCells = leafCells
+
+	ksl.Debugf("size of leaf cell: %v", len(leafCells))
 
 	// try to comment the following two command before run TestPermit
 	stopCh := signals.SetupSignalHandler()
@@ -337,7 +339,7 @@ func (kss *KubeShareScheduler) Filter(ctx context.Context, state *framework.Cycl
 	}
 
 	// check if the port in the node is sufficient
-	port := kss.nodePodManagerPortBitmap[nodeName].FindNextFromCurrentAndSet() + PodManagerPortStart
+	port := kss.nodePodManagerPortBitmap[nodeName].FindNextFromCurrent() + PodManagerPortStart
 	kss.ksl.Debugf("[Filter] Port: %v", port)
 	if port == -1 {
 		msg := fmt.Sprintf("Node %v pod manager port pool is full!", nodeName)
@@ -482,6 +484,46 @@ func (kss *KubeShareScheduler) NormalizeScore(ctx context.Context, state *framew
 func (kss *KubeShareScheduler) Reserve(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodeName string) *framework.Status {
 	kss.ksl.Infof("[Reserve] pod: %v/%v(%v) in node %v", pod.Namespace, pod.Name, pod.UID, nodeName)
 
+	_, needGPU, ps := kss.getPodLabels(pod)
+	if !needGPU {
+		return framework.NewStatus(framework.Success, "")
+	}
+
+	multiGPU := ps.request > 1.0
+	if ps.priority <= 0 {
+		ps.cells = kss.calculateOpportunisticPodCellScore(nodeName, ps)
+		kss.ksl.Debugf("[Reserve] pod cell for Opportunistic: %+v", ps.cells)
+	} else {
+		ps.cells = kss.calculateGuaranteePodCellScore(nodeName, ps)
+		kss.ksl.Debugf("[Reserve] pod cell for Guarantee: %+v", ps.cells)
+	}
+
+	if multiGPU {
+		podCopy := kss.newAssumedMultiGPUPod(pod, nodeName)
+
+		err := kss.handle.ClientSet().CoreV1().Pods(podCopy.Namespace).Delete(ctx, pod.Name, metav1.DeleteOptions{})
+		if err != nil {
+			kss.ksl.Debugf("Shadow Pod %v was deleted, %v", pod.Name, err)
+		}
+		kss.ksl.Infof("[Reserve-> Delete] pod: %v/%v(%v) in node %v", pod.Namespace, pod.Name, pod.UID, pod.Spec.NodeName)
+
+		podCopy, err = kss.handle.ClientSet().CoreV1().Pods(podCopy.Namespace).Create(ctx, podCopy, metav1.CreateOptions{})
+		if err != nil {
+			kss.ksl.Errorf("Pod %v recreate error: %v", podCopy.Name, err)
+		}
+		kss.ksl.Infof("[Reserve-> Create] pod: %v/%v(%v) in node %v", podCopy.Namespace, podCopy.Name, podCopy.UID, pod.Spec.NodeName)
+
+	} else {
+
+	}
+	return framework.NewStatus(framework.Success, "")
+}
+
+/*
+
+func (kss *KubeShareScheduler) Reserve(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodeName string) *framework.Status {
+	kss.ksl.Infof("[Reserve] pod: %v/%v(%v) in node %v", pod.Namespace, pod.Name, pod.UID, nodeName)
+
 	podCopy := pod.DeepCopy()
 	if podCopy.Annotations == nil {
 		podCopy.Annotations = make(map[string]string)
@@ -509,6 +551,7 @@ func (kss *KubeShareScheduler) Reserve(ctx context.Context, state *framework.Cyc
 	return framework.NewStatus(framework.Success, "")
 }
 
+*/
 // rejects all other Pods in the PodGroup when one of the pods in the group times out.
 func (kss *KubeShareScheduler) Unreserve(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodeName string) {
 	kss.ksl.Infof("[UnReserve] pod: %v/%v(%v) in node %v", pod.Namespace, pod.Name, pod.UID, nodeName)
