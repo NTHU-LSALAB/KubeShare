@@ -50,16 +50,42 @@ func (kss *KubeShareScheduler) addPod(obj interface{}) {
 	}
 }
 
-func (kss *KubeShareScheduler) updatePod(oldObj, newObj interface{}) {
-	oldPod := oldObj.(*v1.Pod)
-	newPod := newObj.(*v1.Pod)
-	kss.ksl.Infof("[UPDATE POD] old: %v/%v(%v) ; new: %v/%v(%v)", oldPod.Namespace, oldPod.Name, oldPod.UID, newPod.Namespace, newPod.Name, newPod.UID)
-}
+// func (kss *KubeShareScheduler) updatePod(oldObj, newObj interface{}) {
+// 	oldPod := oldObj.(*v1.Pod)
+// 	newPod := newObj.(*v1.Pod)
+// 	kss.ksl.Infof("[UPDATE POD] old: %v/%v(%v) ; new: %v/%v(%v)", oldPod.Namespace, oldPod.Name, oldPod.UID, newPod.Namespace, newPod.Name, newPod.UID)
+// }
 
 func (kss *KubeShareScheduler) deletePod(obj interface{}) {
 	pod := obj.(*v1.Pod)
-	kss.ksl.Infof("[DELETE POD] %v/%v(%v)", pod.Namespace, pod.Name, pod.UID)
-	// reclaim the resource
+
+	// reclaim the resource and its pod manager pod
+	podStatus, ok := kss.deletePodStatus(pod)
+
+	if ok {
+		request := podStatus.request
+		memory := podStatus.memory
+		multiGPU := request > 1.0
+
+		kss.ksl.Infof("[DELETE POD] %v/%v(%v) reclaims its gpu resource", pod.Namespace, pod.Name, pod.UID)
+
+		if multiGPU {
+			cells := podStatus.cells
+			for _, cell := range cells {
+				kss.reclaimResource(cell, cell.leafCellNumber, cell.fullMemory)
+			}
+		} else {
+			port := int(podStatus.port)
+			if port >= PodManagerPortStart {
+				kss.nodePodManagerPortBitmap[podStatus.nodeName].Unmask(port - PodManagerPortStart)
+			}
+			cell := podStatus.cells[0]
+			kss.reclaimResource(cell, request, memory)
+		}
+	} else {
+		kss.ksl.Infof("[DELETE POD] %v/%v(%v) is a shadow pod or regular pod, not need to reclaim resource", pod.Namespace, pod.Name, pod.UID)
+	}
+
 }
 
 func filterPod(obj interface{}) bool {
@@ -244,27 +270,26 @@ func (kss *KubeShareScheduler) getPodLabels(pod *v1.Pod) (string, bool, *PodStat
 
 }
 
-// delete pod status by namespace and name of pod
-func (kss *KubeShareScheduler) deletePodRequest(pod *v1.Pod) {
+// delete pod status by namespace/name of pod
+func (kss *KubeShareScheduler) deletePodStatus(pod *v1.Pod) (*PodStatus, bool) {
 	key := fmt.Sprintf("%v/%v", pod.Namespace, pod.Name)
 	kss.podStatusMutex.Lock()
 	defer kss.podStatusMutex.Unlock()
 
-	_, ok := kss.podStatus[key]
-	if ok {
+	ps, ok := kss.podStatus[key]
+	kss.printPodStatus(ps)
+	kss.ksl.Debugf("[deletePodStatus] pod %v(%v) -> it status uid %v", key, pod.UID, ps.uid)
+	if ok && ps.uid == string(pod.UID) {
 		delete(kss.podStatus, key)
+		return ps, true
 	}
-
+	return nil, false
 }
-
-// func (kss *KubeShareScheduler) getPodDecision(pod *v1.Pod) {
-
-// }
 
 // reserves the gpu resource and injects the environment variables
 func (kss *KubeShareScheduler) newAssumedMultiGPUPod(pod *v1.Pod, nodeName string) *v1.Pod {
 	_, _, ps := kss.getPodLabels(pod)
-
+	ps.uid = ""
 	cells := ps.cells
 
 	podCopy := pod.DeepCopy()
@@ -318,7 +343,7 @@ func (kss *KubeShareScheduler) newAssumedMultiGPUPod(pod *v1.Pod, nodeName strin
 
 func (kss *KubeShareScheduler) newAssumedSharedGPUPod(pod *v1.Pod, nodeName string) *v1.Pod {
 	_, _, ps := kss.getPodLabels(pod)
-
+	ps.uid = ""
 	cell := ps.cells[0]
 
 	podCopy := pod.DeepCopy()
@@ -334,7 +359,7 @@ func (kss *KubeShareScheduler) newAssumedSharedGPUPod(pod *v1.Pod, nodeName stri
 	ps.model = cell.cellType
 
 	if ps.memory == 0 {
-		ps.memory = int64(math.Floor(ps.request * float64(cell.freeMemory)))
+		ps.memory = int64(math.Floor(ps.request * float64(cell.fullMemory)))
 		kss.ksl.Debugf("Defaulting the pod gpu memory request: %v", ps.memory)
 	}
 	kss.reserveResource(cell, ps.request, ps.memory)
@@ -393,7 +418,7 @@ func (kss *KubeShareScheduler) newAssumedSharedGPUPod(pod *v1.Pod, nodeName stri
 
 // update leaf cell and its parents
 func (kss *KubeShareScheduler) reserveResource(cell *Cell, request float64, memory int64) {
-	kss.ksl.Debugf("==============TEST UPDATE================")
+	kss.ksl.Debugf("==============TEST RESERVE================")
 	kss.cellMutex.Lock()
 	defer kss.cellMutex.Unlock()
 
@@ -412,6 +437,31 @@ func (kss *KubeShareScheduler) reserveResource(cell *Cell, request float64, memo
 		if current.parent != nil { //&& !set[cell.parent.id] {
 			s.Push(current.parent)
 			kss.ksl.Debugf("[reserveResource] parent cell %v:%+v", current.parent.cellType, current.parent)
+		}
+	}
+}
+
+// reclaim leaf cell and its parents
+func (kss *KubeShareScheduler) reclaimResource(cell *Cell, request float64, memory int64) {
+	kss.ksl.Debugf("==============TEST RECLAIM================")
+	kss.cellMutex.Lock()
+	defer kss.cellMutex.Unlock()
+
+	s := NewStack()
+	s.Push(cell)
+
+	//set := map[string]bool{}
+	for s.Len() > 0 {
+		current := s.Pop()
+		current.freeMemory += memory
+		current.available += request
+		// set[current.id] = true
+		current.availableWholeCell = math.Floor(current.available)
+
+		kss.ksl.Debugf("[reclaimResource] cell : %+v", current)
+		if current.parent != nil { //&& !set[cell.parent.id] {
+			s.Push(current.parent)
+			kss.ksl.Debugf("[reclaimResource] parent cell %v:%+v", current.parent.cellType, current.parent)
 		}
 	}
 }

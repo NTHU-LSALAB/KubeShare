@@ -92,7 +92,7 @@ type KubeShareScheduler struct {
 	gpuInfos          map[string]map[string][]GPU // key: node name  ; val: {model, all information of gpu in the node}
 	cellFreeList      map[string]LevelCellList
 	cellMutex         *sync.RWMutex
-	leafCells         map[string]*Cell
+	leafCells         map[string]*Cell //key: uuid ; val: cell
 
 	nodePodManagerPortBitmap      map[string]*bitmap.RRBitmap
 	nodePodManagerPortBitmapMutex *sync.Mutex
@@ -211,8 +211,8 @@ func New(config *runtime.Unknown, handle framework.FrameworkHandle) (framework.P
 		cache.FilteringResourceEventHandler{
 			FilterFunc: filterPod,
 			Handler: cache.ResourceEventHandlerFuncs{
-				AddFunc:    kss.addPod,
-				UpdateFunc: kss.updatePod,
+				AddFunc: kss.addPod,
+				//UpdateFunc: kss.updatePod,
 				DeleteFunc: kss.deletePod,
 			},
 		},
@@ -504,7 +504,6 @@ func (kss *KubeShareScheduler) Reserve(ctx context.Context, state *framework.Cyc
 	} else {
 		podCopy = kss.newAssumedSharedGPUPod(pod, nodeName)
 	}
-	ps.uid = ""
 
 	err := kss.handle.ClientSet().CoreV1().Pods(podCopy.Namespace).Delete(ctx, pod.Name, metav1.DeleteOptions{})
 	if err != nil {
@@ -516,6 +515,7 @@ func (kss *KubeShareScheduler) Reserve(ctx context.Context, state *framework.Cyc
 	if err != nil {
 		kss.ksl.Errorf("Pod %v recreate error: %v", podCopy.Name, err)
 	}
+
 	ps.uid = string(podCopy.UID)
 	kss.ksl.Debugf("[Reserve] New Pod %v/%v(%v) v.s. Old Pod  %v/%v(%v)", podCopy.Namespace, podCopy.Name, podCopy.UID, pod.Namespace, pod.Name, pod.UID)
 	kss.ksl.Infof("[Reserve-> Create] pod: %v/%v(%v) in node %v", podCopy.Namespace, podCopy.Name, podCopy.UID, pod.Spec.NodeName)
@@ -523,39 +523,6 @@ func (kss *KubeShareScheduler) Reserve(ctx context.Context, state *framework.Cyc
 	return framework.NewStatus(framework.Success, "")
 }
 
-/*
-
-func (kss *KubeShareScheduler) Reserve(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodeName string) *framework.Status {
-	kss.ksl.Infof("[Reserve] pod: %v/%v(%v) in node %v", pod.Namespace, pod.Name, pod.UID, nodeName)
-
-	podCopy := pod.DeepCopy()
-	if podCopy.Annotations == nil {
-		podCopy.Annotations = make(map[string]string)
-	}
-	podCopy.Annotations["sharedpod/test"] = nodeName
-	podCopy, err := kss.handle.ClientSet().CoreV1().Pods(podCopy.Namespace).Update(ctx, podCopy, metav1.UpdateOptions{})
-	if err != nil {
-		kss.ksl.Errorf("The Pod %v/%v updated fail", pod.Namespace, pod.Name)
-	}
-	kss.ksl.Infof("[Reserve-> Update] pod: %v/%v(%v) in node %v", podCopy.Namespace, podCopy.Name, podCopy.UID, pod.Spec.NodeName)
-
-	err = kss.handle.ClientSet().CoreV1().Pods(podCopy.Namespace).Delete(ctx, podCopy.Name, metav1.DeleteOptions{})
-	if err != nil {
-		kss.ksl.Debugf("Dummy Pod %v was deleted", pod.Name)
-	}
-	kss.ksl.Infof("[Reserve-> Delete] pod: %v/%v(%v) in node %v", podCopy.Namespace, podCopy.Name, podCopy.UID, pod.Spec.NodeName)
-	podCopy.ResourceVersion = ""
-	podCopy.Spec.NodeName = nodeName
-	podCopy, err = kss.handle.ClientSet().CoreV1().Pods(podCopy.Namespace).Create(ctx, podCopy, metav1.CreateOptions{})
-	if err != nil {
-		kss.ksl.Errorf("Pod %v recreate error: %v", podCopy.Name, err)
-	}
-	kss.ksl.Infof("[Reserve-> Create] pod: %v/%v(%v) in node %v", podCopy.Namespace, podCopy.Name, podCopy.UID, pod.Spec.NodeName)
-
-	return framework.NewStatus(framework.Success, "")
-}
-
-*/
 // rejects all other Pods in the PodGroup when one of the pods in the group times out.
 func (kss *KubeShareScheduler) Unreserve(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodeName string) {
 	kss.ksl.Infof("[UnReserve] pod: %v/%v(%v) in node %v", pod.Namespace, pod.Name, pod.UID, nodeName)

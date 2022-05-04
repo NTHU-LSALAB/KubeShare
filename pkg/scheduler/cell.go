@@ -267,7 +267,7 @@ func (c *cellConstructor) buildChildCell(
 
 	if ce.level == 1 {
 		c.ksl.Debugf("%+v", cellInstance)
-		c.leafCells[cellInstance.id] = cellInstance
+		c.leafCells[cellInstance.uuid] = cellInstance
 		return cellInstance
 	}
 

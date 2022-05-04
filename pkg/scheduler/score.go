@@ -47,7 +47,7 @@ func (kss *KubeShareScheduler) calculateOpportunisticPodNodeScore(cellList CellL
 		return 0
 	}
 	// number of free leaf cells
-	freeLeafCell := int64(0)
+	freeLeafCell := 0.0
 	score := int64(0)
 	for _, cell := range cellList {
 		//
@@ -61,11 +61,12 @@ func (kss *KubeShareScheduler) calculateOpportunisticPodNodeScore(cellList CellL
 			// gpu usage
 			score += int64((1 - cell.available) * 100)
 		}
-		kss.ksl.Debugf("OpportunisticPodNodeScore %v with score: %v", cell.cellType, score)
+		kss.ksl.Debugf("OpportunisticPodNodeScore %v with score: %v, free leaf cell %v", cell.cellType, score, freeLeafCell)
 	}
 
 	n := int64(len(cellList))
-	score -= int64(freeLeafCell / n * 100) //
+	score -= int64(float64(freeLeafCell/float64(n)) * 100) //
+	kss.ksl.Debugf("OpportunisticPodNodeScore score: %v", score)
 	return int64(score / n)
 }
 
@@ -111,7 +112,8 @@ func (kss *KubeShareScheduler) calculateGuaranteePodNodeScore(cellList CellList,
 			locality += dis
 			kss.ksl.Debugf("distance %v <-> %v: %v", cell.id, stringID[i], dis)
 		}
-		score -= int64(locality / nGroup)
+		score -= int64((locality / nGroup) * 100)
+		kss.ksl.Debugf("GuaranteePodNodeScore score: %v", score)
 	}
 	return score / int64(len(cellList))
 }
@@ -359,7 +361,7 @@ func (kss *KubeShareScheduler) calculateGuaranteePodCellScore(nodeName string, p
 					locality += dis
 					kss.ksl.Debugf("[Cell] distance %v <-> %v: %v", cell.id, stringID[i], dis)
 				}
-				score -= int32(locality / nGroup)
+				score -= int32((locality / nGroup) * 100)
 			}
 			scores = append(scores, &CellScore{cell: cell, score: score})
 		}
