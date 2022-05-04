@@ -497,25 +497,29 @@ func (kss *KubeShareScheduler) Reserve(ctx context.Context, state *framework.Cyc
 		ps.cells = kss.calculateGuaranteePodCellScore(nodeName, ps)
 		kss.ksl.Debugf("[Reserve] pod cell for Guarantee: %+v", ps.cells)
 	}
-
+	var podCopy *v1.Pod
 	if multiGPU {
-		podCopy := kss.newAssumedMultiGPUPod(pod, nodeName)
-
-		err := kss.handle.ClientSet().CoreV1().Pods(podCopy.Namespace).Delete(ctx, pod.Name, metav1.DeleteOptions{})
-		if err != nil {
-			kss.ksl.Debugf("Shadow Pod %v was deleted, %v", pod.Name, err)
-		}
-		kss.ksl.Infof("[Reserve-> Delete] pod: %v/%v(%v) in node %v", pod.Namespace, pod.Name, pod.UID, pod.Spec.NodeName)
-
-		podCopy, err = kss.handle.ClientSet().CoreV1().Pods(podCopy.Namespace).Create(ctx, podCopy, metav1.CreateOptions{})
-		if err != nil {
-			kss.ksl.Errorf("Pod %v recreate error: %v", podCopy.Name, err)
-		}
-		kss.ksl.Infof("[Reserve-> Create] pod: %v/%v(%v) in node %v", podCopy.Namespace, podCopy.Name, podCopy.UID, pod.Spec.NodeName)
+		podCopy = kss.newAssumedMultiGPUPod(pod, nodeName)
 
 	} else {
-
+		podCopy = kss.newAssumedSharedGPUPod(pod, nodeName)
 	}
+	ps.uid = ""
+
+	err := kss.handle.ClientSet().CoreV1().Pods(podCopy.Namespace).Delete(ctx, pod.Name, metav1.DeleteOptions{})
+	if err != nil {
+		kss.ksl.Debugf("Shadow Pod %v was deleted, %v", pod.Name, err)
+	}
+	kss.ksl.Infof("[Reserve-> Delete] pod: %v/%v(%v) in node %v", pod.Namespace, pod.Name, pod.UID, pod.Spec.NodeName)
+
+	podCopy, err = kss.handle.ClientSet().CoreV1().Pods(podCopy.Namespace).Create(ctx, podCopy, metav1.CreateOptions{})
+	if err != nil {
+		kss.ksl.Errorf("Pod %v recreate error: %v", podCopy.Name, err)
+	}
+	ps.uid = string(podCopy.UID)
+	kss.ksl.Debugf("[Reserve] New Pod %v/%v(%v) v.s. Old Pod  %v/%v(%v)", podCopy.Namespace, podCopy.Name, podCopy.UID, pod.Namespace, pod.Name, pod.UID)
+	kss.ksl.Infof("[Reserve-> Create] pod: %v/%v(%v) in node %v", podCopy.Namespace, podCopy.Name, podCopy.UID, pod.Spec.NodeName)
+
 	return framework.NewStatus(framework.Success, "")
 }
 

@@ -27,6 +27,7 @@ func (kss *KubeShareScheduler) filterNode(nodeName, model string, request float6
 
 // check if the gpu resource in the node can fit the pod requirement
 // and calculate its free resource in the specified gpu model
+
 func (kss *KubeShareScheduler) checkCellResource(cell *Cell, nodeName string, request float64, memory int64) (bool, float64, int64) {
 	s := NewStack()
 
@@ -79,6 +80,8 @@ func (kss *KubeShareScheduler) checkCellResource(cell *Cell, nodeName string, re
 	return false, 0, 0
 }
 
+// check if the gpu resource in the node can fit the pod requirement
+// and calculate its free resource in the specified gpu model
 /*
 func (kss *KubeShareScheduler) checkCellResource(cell *Cell, nodeName string, request float64, memory int64) (bool, float64, int64) {
 	s := NewStack()

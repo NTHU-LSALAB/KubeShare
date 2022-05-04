@@ -33,15 +33,15 @@ func appendCellList(cl1, cl2 CellList) CellList {
 // internal structure to build the cell elements
 // preprocess the information about the cell
 type cellElement struct {
-	cellType           string  // cell types
-	level              int     // cell level, leaf cell is 1
-	priority           int32   // cell priority
-	childCellNumber    float64 // how many child cells in the current cell
-	childCellType      string  // child cell type
-	leafCellNumber     float64 // how many leaf cells in the current cell
-	leafCellType       string  // leaf cell type
-	atOrHigherThanNode bool    // cell types is a node or above cell
-	isMultiNodes       bool    // cell type is a multiple cell
+	cellType        string  // cell types
+	level           int     // cell level, leaf cell is 1
+	priority        int32   // cell priority
+	childCellNumber float64 // how many child cells in the current cell
+	childCellType   string  // child cell type
+	leafCellNumber  float64 // how many leaf cells in the current cell
+	leafCellType    string  // leaf cell type
+	isNode          bool    // cell types is a node cell
+	isMultiNodes    bool    // cell type is a multiple cell
 }
 
 func (kss *KubeShareScheduler) buildCellChains(cellTypes map[string]CellTypeSpec) map[string]*cellElement {
@@ -88,15 +88,15 @@ func (kss *KubeShareScheduler) addCell(
 	// not found in raw spec, it's leaf cell
 	if !ok {
 		cellElements[cellType] = &cellElement{
-			cellType:           cellType,
-			level:              lowestLevel,
-			priority:           priority,
-			childCellType:      "",
-			childCellNumber:    0.0,
-			leafCellType:       cellType,
-			leafCellNumber:     1.0,
-			atOrHigherThanNode: false,
-			isMultiNodes:       false,
+			cellType:        cellType,
+			level:           lowestLevel,
+			priority:        priority,
+			childCellType:   "",
+			childCellNumber: 0.0,
+			leafCellType:    cellType,
+			leafCellNumber:  1.0,
+			isNode:          false,
+			isMultiNodes:    false,
 		}
 
 		// kss.gpuPriorityMutex.Lock()
@@ -116,27 +116,27 @@ func (kss *KubeShareScheduler) addCell(
 	// child cell type has been added, add current element
 	childCellElement := cellElements[child]
 	cellElements[cellType] = &cellElement{
-		cellType:           cellType,
-		level:              childCellElement.level + 1,
-		priority:           childCellElement.priority,
-		childCellType:      childCellElement.cellType,
-		childCellNumber:    float64(cts.ChildCellNumber),
-		leafCellType:       childCellElement.leafCellType,
-		leafCellNumber:     childCellElement.leafCellNumber * float64(cts.ChildCellNumber),
-		atOrHigherThanNode: childCellElement.atOrHigherThanNode || cts.IsNodeLevel,
-		isMultiNodes:       childCellElement.atOrHigherThanNode,
+		cellType:        cellType,
+		level:           childCellElement.level + 1,
+		priority:        childCellElement.priority,
+		childCellType:   childCellElement.cellType,
+		childCellNumber: float64(cts.ChildCellNumber),
+		leafCellType:    childCellElement.leafCellType,
+		leafCellNumber:  childCellElement.leafCellNumber * float64(cts.ChildCellNumber),
+		isNode:          cts.IsNodeLevel,
+		isMultiNodes:    childCellElement.isNode || childCellElement.isMultiNodes,
 	}
 
 }
 
 type Cell struct {
-	cellType           string
-	id                 string
-	level              int
-	atOrHigherThanNode bool // true if the cell is at or higher than node level
-
-	priority int32
-	uuid     string
+	cellType       string
+	id             string
+	level          int
+	higherThanNode bool // true if the cell is higher than node level
+	isNode         bool
+	priority       int32
+	uuid           string
 
 	leafCellType       string
 	leafCellNumber     float64
@@ -157,7 +157,8 @@ func NewCell(
 	cellType string,
 	id string,
 	level int,
-	atOrHigherThanNode bool,
+	higherThanNode bool,
+	isNode bool,
 	leafCellNumber float64,
 	priority int32,
 	leafCellType string,
@@ -167,7 +168,8 @@ func NewCell(
 		cellType:           cellType,
 		id:                 id,
 		level:              level,
-		atOrHigherThanNode: atOrHigherThanNode,
+		higherThanNode:     higherThanNode,
+		isNode:             isNode,
 		priority:           priority,
 		uuid:               "",
 		freeMemory:         0,
@@ -237,7 +239,7 @@ func (c *cellConstructor) buildFullTree(buildingType string, buildingSpec CellSp
 		c.ksl.Errorf("cellType %v in Cells is not found in cell types definition", buildingType)
 	}
 	// make sure cells in kubeshare-config.yaml will start from node or above
-	if !ce.atOrHigherThanNode {
+	if !(ce.isNode || ce.isMultiNodes) {
 		c.ksl.Errorf("top cell must be node-level or above: %v", buildingType)
 	}
 
@@ -254,11 +256,11 @@ func (c *cellConstructor) buildChildCell(
 
 	ce := c.cellElements[cellType]
 	// node-level: pass node name it to its child
-	if ce.atOrHigherThanNode && !ce.isMultiNodes {
+	if ce.isNode {
 		splitID := strings.Split(string(spec.CellID), "/")
 		currentNode = splitID[len(splitID)-1]
 	}
-	cellInstance := NewCell(cellType, spec.CellID, ce.level, ce.atOrHigherThanNode || ce.isMultiNodes, ce.leafCellNumber, ce.priority, ce.leafCellType)
+	cellInstance := NewCell(cellType, spec.CellID, ce.level, ce.isMultiNodes, ce.isNode, ce.leafCellNumber, ce.priority, ce.leafCellType)
 	if !ce.isMultiNodes {
 		cellInstance.node = currentNode
 	}

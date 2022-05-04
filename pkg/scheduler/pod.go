@@ -3,6 +3,7 @@ package scheduler
 import (
 	"bytes"
 	"fmt"
+	"math"
 	"regexp"
 	"strconv"
 
@@ -12,6 +13,11 @@ import (
 
 var (
 	valueFormat, _ = regexp.Compile("[0]+.[0-9]+|[1-9]+[0-9]*[.]+[0]+|[1-9]+")
+)
+
+const (
+	// the volume path that store the hook library and schedulerIP
+	KubeShareLibraryPath = "/kubeshare/library"
 )
 
 type PodStatus struct {
@@ -255,6 +261,7 @@ func (kss *KubeShareScheduler) deletePodRequest(pod *v1.Pod) {
 
 // }
 
+// reserves the gpu resource and injects the environment variables
 func (kss *KubeShareScheduler) newAssumedMultiGPUPod(pod *v1.Pod, nodeName string) *v1.Pod {
 	_, _, ps := kss.getPodLabels(pod)
 
@@ -269,7 +276,7 @@ func (kss *KubeShareScheduler) newAssumedMultiGPUPod(pod *v1.Pod, nodeName strin
 	totalMemory := int64(0)
 	for _, cell := range cells {
 		totalMemory += cell.freeMemory
-		kss.updateResource(cell, cell.available, cell.freeMemory)
+		kss.reserveResource(cell, cell.available, cell.freeMemory)
 
 		cellIDs.WriteString(cell.id)
 		cellIDs.WriteString(",")
@@ -309,7 +316,83 @@ func (kss *KubeShareScheduler) newAssumedMultiGPUPod(pod *v1.Pod, nodeName strin
 	return podCopy
 }
 
-func (kss *KubeShareScheduler) updateResource(cell *Cell, request float64, memory int64) {
+func (kss *KubeShareScheduler) newAssumedSharedGPUPod(pod *v1.Pod, nodeName string) *v1.Pod {
+	_, _, ps := kss.getPodLabels(pod)
+
+	cell := ps.cells[0]
+
+	podCopy := pod.DeepCopy()
+	podCopy.ResourceVersion = ""
+	podCopy.Spec.NodeName = nodeName
+	ps.nodeName = nodeName
+	if podCopy.Annotations == nil {
+		podCopy.Annotations = make(map[string]string)
+	}
+
+	podCopy.Annotations[PodCellID] = cell.id
+	podCopy.Annotations[PodGPUModel] = cell.cellType
+	ps.model = cell.cellType
+
+	if ps.memory == 0 {
+		ps.memory = int64(math.Floor(ps.request * float64(cell.freeMemory)))
+		kss.ksl.Debugf("Defaulting the pod gpu memory request: %v", ps.memory)
+	}
+	kss.reserveResource(cell, ps.request, ps.memory)
+	podCopy.Annotations[PodGPUMemory] = strconv.FormatInt(ps.memory, 10)
+
+	uuid := cell.uuid
+	podCopy.Annotations[PodGPUUUID] = uuid
+	ps.uuid = uuid
+
+	podManagerPort := kss.nodePodManagerPortBitmap[nodeName].FindNextFromCurrentAndSet() + PodManagerPortStart
+	ps.port = int32(podManagerPort)
+	kss.ksl.Debugf("[newAssumedSharedGPUPod] Port: %v", podManagerPort)
+
+	for i := range podCopy.Spec.Containers {
+		c := &podCopy.Spec.Containers[i]
+		c.Env = append(c.Env,
+			v1.EnvVar{
+				Name:  "NVIDIA_VISIBLE_DEVICES",
+				Value: uuid,
+			},
+			v1.EnvVar{
+				Name:  "NVIDIA_DRIVER_CAPABILITIES",
+				Value: "compute,utility",
+			},
+			v1.EnvVar{
+				Name:  "LD_PRELOAD",
+				Value: KubeShareLibraryPath + "/libgemhook.so.1",
+			},
+			v1.EnvVar{
+				Name:  "POD_MANAGER_PORT",
+				Value: fmt.Sprintf("%d", podManagerPort),
+			},
+			v1.EnvVar{
+				Name:  "POD_NAME",
+				Value: fmt.Sprintf("%s/%s", podCopy.Namespace, podCopy.Name),
+			})
+		c.VolumeMounts = append(c.VolumeMounts,
+			v1.VolumeMount{
+				Name:      "kubeshare-lib",
+				MountPath: KubeShareLibraryPath,
+			},
+		)
+	}
+	podCopy.Spec.Volumes = append(podCopy.Spec.Volumes,
+		v1.Volume{
+			Name: "kubeshare-lib",
+			VolumeSource: v1.VolumeSource{
+				HostPath: &v1.HostPathVolumeSource{
+					Path: KubeShareLibraryPath,
+				},
+			},
+		},
+	)
+	return podCopy
+}
+
+// update leaf cell and its parents
+func (kss *KubeShareScheduler) reserveResource(cell *Cell, request float64, memory int64) {
 	kss.ksl.Debugf("==============TEST UPDATE================")
 	kss.cellMutex.Lock()
 	defer kss.cellMutex.Unlock()
@@ -323,13 +406,12 @@ func (kss *KubeShareScheduler) updateResource(cell *Cell, request float64, memor
 		current.freeMemory -= memory
 		current.available -= request
 		// set[current.id] = true
-		if request == 1.0 {
-			current.availableWholeCell--
-		}
-		kss.ksl.Debugf("[updateResource] cell : %+v", current)
+		current.availableWholeCell = math.Floor(current.available)
+
+		kss.ksl.Debugf("[reserveResource] cell : %+v", current)
 		if current.parent != nil { //&& !set[cell.parent.id] {
 			s.Push(current.parent)
-			kss.ksl.Debugf("[updateResource] parent cell %v:%+v", current.parent.cellType, current.parent)
+			kss.ksl.Debugf("[reserveResource] parent cell %v:%+v", current.parent.cellType, current.parent)
 		}
 	}
 }

@@ -8,6 +8,7 @@ metadata:
     "sharedgpu/gpu_request": "0.3"
     "sharedgpu/gpu_limit": "1.0"
     "sharedgpu/gpu_mem": "3073741824"
+    "sharedgpu/priority": "100"
 spec:
   schedulerName: kubeshare-scheduler
   containers:
