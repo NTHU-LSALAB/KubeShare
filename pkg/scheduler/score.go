@@ -1,33 +1,30 @@
 package scheduler
 
 import (
-	"context"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
-	"time"
-
-	"github.com/prometheus/common/model"
 )
 
 /** for regular pod **/
 // kubeshare treats gpu resource as rare resource
 // if the node without gpu, node score will be set to 100
 // otherwise, node score will be set to be 0
-func (kss *KubeShareScheduler) calculateRegularPodNodeScore(nodeName string) int64 {
+func (kss *KubeShareScheduler) calculateRegularPodNodeScore(nodeName string) float64 {
 
 	if len(kss.gpuInfos[nodeName]) > 0 {
-		return int64(100)
+		return 100
 	}
 
-	return int64(0)
+	return 0
 }
 
 /** for opportunistic pod **/
-func (kss *KubeShareScheduler) calculateOpportunisticPodScore(nodeName string, podStatus *PodStatus) int64 {
+func (kss *KubeShareScheduler) calculateOpportunisticPodScore(nodeName string, podStatus *PodStatus) float64 {
 
 	model := podStatus.model
-	score := int64(0)
+	score := 0.0
 	// assigned gpu model
 	if model != "" {
 		score = kss.calculateOpportunisticPodNodeScore(kss.getModelLeafCellbyNode(nodeName, model))
@@ -42,16 +39,16 @@ func (kss *KubeShareScheduler) calculateOpportunisticPodScore(nodeName string, p
 // score = ( cell priority(computation power)
 //           + gpu resource usage(defragmentation)
 //           - # of free leaf cell (defragmentation)(%) ) / # of cell
-func (kss *KubeShareScheduler) calculateOpportunisticPodNodeScore(cellList CellList) int64 {
+func (kss *KubeShareScheduler) calculateOpportunisticPodNodeScore(cellList CellList) float64 {
 	if cellList == nil {
 		return 0
 	}
 	// number of free leaf cells
 	freeLeafCell := 0.0
-	score := int64(0)
+	score := 0.0
 	for _, cell := range cellList {
 		//
-		score += int64(kss.gpuPriority[cell.cellType])
+		score += float64(kss.gpuPriority[cell.cellType])
 		// gpu resource
 		available := cell.available
 		if available == 1 {
@@ -59,21 +56,21 @@ func (kss *KubeShareScheduler) calculateOpportunisticPodNodeScore(cellList CellL
 			// gpu usage : 0
 		} else {
 			// gpu usage
-			score += int64((1 - cell.available) * 100)
+			score += (1 - cell.available) * 100
 		}
 		kss.ksl.Debugf("OpportunisticPodNodeScore %v with score: %v, free leaf cell %v", cell.cellType, score, freeLeafCell)
 	}
 
-	n := int64(len(cellList))
-	score -= int64(float64(freeLeafCell/float64(n)) * 100) //
-	kss.ksl.Debugf("OpportunisticPodNodeScore score: %v", score)
-	return int64(score / n)
+	n := float64(len(cellList))
+	score -= freeLeafCell / n * 100
+	kss.ksl.Debugf("OpportunisticPodNodeScore with freeLeaf score: %v", score)
+	return score / n
 }
 
 /** for guarantee pod **/
-func (kss *KubeShareScheduler) calculateGuaranteePodScore(nodeName string, podStatus *PodStatus) int64 {
+func (kss *KubeShareScheduler) calculateGuaranteePodScore(nodeName string, podStatus *PodStatus) float64 {
 	model := podStatus.model
-	score := int64(0)
+	score := 0.0
 	if model != "" {
 		score = kss.calculateGuaranteePodNodeScore(kss.getModelLeafCellbyNode(nodeName, model), podStatus.podGroup)
 	} else {
@@ -85,39 +82,36 @@ func (kss *KubeShareScheduler) calculateGuaranteePodScore(nodeName string, podSt
 // socre = ( cell priority(computation power)
 //          -  gpu resource usage(defragmentation)
 //          -  average locality(placement sensitivity) ) / # of cell
-func (kss *KubeShareScheduler) calculateGuaranteePodNodeScore(cellList CellList, podGroup string) int64 {
+func (kss *KubeShareScheduler) calculateGuaranteePodNodeScore(cellList CellList, podGroup string) float64 {
 	if cellList == nil {
 		return 0
 	}
 
-	score := int64(0)
-	stringID := kss.getCellIDFromPodGroup(podGroup)
-	cellIDList := kss.convertCellID(stringID)
-	nGroup := len(cellIDList)
+	score := 0.0
+	idGroup := kss.filterPodGroup(podGroup) // kss.getCellIDFromPodGroup(podGroup)
+	nGroup := float64(len(idGroup))
 
 	for _, cell := range cellList {
-		score += int64(kss.gpuPriority[cell.cellType]) - int64((1-cell.available)*100)
-		kss.ksl.Debugf("GuaranteePodNodeScore %v with score: %v", cell.cellType, score)
+		score += float64(kss.gpuPriority[cell.cellType]) - ((1 - cell.available) * 100)
+		kss.ksl.Debugf("GuaranteePodNodeScore %v(%v) with score: %v", cell.cellType, cell.id, score)
 		if nGroup == 0 {
 			kss.ksl.Debugf("No pod in same group, jump ...")
 			continue
 		}
-		locality := 0
-		currentId := kss.parseCellID(cell.id)
-		for i, id := range cellIDList {
-			dis := id - currentId
-			if dis < 0 {
-				dis *= -1
-			}
+		locality := 0.0
+		currentId := strings.Split(cell.id, "/")
+		for _, id := range idGroup {
+			dis := kss.getCellIDDistance(currentId, id)
 			locality += dis
-			kss.ksl.Debugf("distance %v <-> %v: %v", cell.id, stringID[i], dis)
+			kss.ksl.Debugf("distance %v <-> %v: %v", cell.id, id, dis)
 		}
-		score -= int64((locality / nGroup) * 100)
-		kss.ksl.Debugf("GuaranteePodNodeScore score: %v", score)
+		score -= locality / nGroup * 100
+		kss.ksl.Debugf("GuaranteePodNodeScore %v(%v) with Locality score: %v", cell.cellType, cell.id, score)
 	}
-	return score / int64(len(cellList))
+	return score / float64(len(cellList))
 }
 
+/*
 func (kss *KubeShareScheduler) queryPodFromPodGroup(podGroup string) []model.LabelSet {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -133,44 +127,101 @@ func (kss *KubeShareScheduler) queryPodFromPodGroup(podGroup string) []model.Lab
 	if len(warnings) > 0 {
 		kss.ksl.Warnf("Warnings: %v\n", warnings)
 	}
+	kss.ksl.Debugf("[queryPodFromPodGroup] %+v: %v", podGroup, len(result))
 	return result
 }
 
 func (kss *KubeShareScheduler) getCellIDFromPodGroup(podGroup string) []string {
 	results := kss.queryPodFromPodGroup(podGroup)
-
+	kss.ksl.Debugf("[getCellIDFromPodGroup] %+v: %v", podGroup, len(results))
 	cellIDList := []string{}
 
 	for _, res := range results {
-		cellID := strings.Split(string(res["cell_id"]), ",")
-		for _, id := range cellID {
-			if id != "" {
-				cellIDList = append(cellIDList, id)
-			}
+		id := string(res["cell_id"])
+		if id != "" {
+			cellIDList = append(cellIDList, id)
 		}
+
 	}
 	return cellIDList
 }
+*/
 
-func (kss *KubeShareScheduler) parseCellID(id string) int {
-	idList := strings.Split(id, "/")
-	nID := len(idList)
-	last := idList[nID-1]
-
-	num, err := strconv.Atoi(last)
-	if err != nil {
-		kss.ksl.Errorf("[parseCellID] convert error: %v", err)
+func (kss *KubeShareScheduler) filterPodGroup(podGroup string) []string {
+	cellIDList := []string{}
+	for _, ps := range kss.podStatus {
+		if ps.podGroup == podGroup {
+			cells := ps.cells
+			for _, cell := range cells {
+				cellIDList = append(cellIDList, cell.id)
+			}
+		}
 	}
-
-	return num
+	kss.ksl.Debugf("[filterPodGroup] %+v: %v", podGroup, len(cellIDList))
+	return cellIDList
 }
 
-func (kss *KubeShareScheduler) convertCellID(cellIDList []string) []int {
-	idList := make([]int, len(cellIDList))
-	for i, id := range cellIDList {
-		idList[i] = kss.parseCellID(id)
+func (kss *KubeShareScheduler) getCellIDDistance(current []string, id string) float64 {
+	idList := strings.Split(id, "/")
+
+	nCurrent := len(current)
+	nID := len(idList)
+	distance := 0.0
+	if nCurrent >= nID {
+		i, j := nID-1, nCurrent-1
+
+		for i >= 0 {
+			cur, err1 := strconv.Atoi(current[j])
+			iid, err2 := strconv.Atoi(idList[i])
+			if err1 != nil || err2 != nil {
+				tmpC, tmpI := current[j], idList[i]
+				kss.ksl.Warnf("[parseCellID] convert error, its node ID-> %v vs %v", tmpC, tmpI)
+				if tmpC == tmpI {
+					return distance
+				}
+			} else {
+				distance += math.Abs(float64(cur) - float64(iid))
+			}
+			i--
+			j--
+		}
+		for ; j >= 0; j-- {
+			cur, err1 := strconv.Atoi(current[j])
+			if err1 != nil {
+				kss.ksl.Errorf("[parseCellID] convert error: %v", err1)
+			} else {
+				distance += float64(cur)
+			}
+		}
+
+	} else {
+		i, j := nID-1, nCurrent-1
+		for j >= 0 {
+			cur, err1 := strconv.Atoi(current[j])
+			iid, err2 := strconv.Atoi(idList[i])
+			if err1 != nil || err2 != nil {
+				tmpC, tmpI := current[j], idList[i]
+				kss.ksl.Warnf("[parseCellID] convert error, its node ID-> %v vs %v", tmpC, tmpI)
+				if tmpC == tmpI {
+					return distance
+				}
+			} else {
+				distance += math.Abs(float64(cur) - float64(iid))
+			}
+			i--
+			j--
+		}
+		for ; i >= 0; i-- {
+			iid, err2 := strconv.Atoi(idList[i])
+			if err2 != nil {
+				kss.ksl.Errorf("[parseCellID] convert error: %v", err2)
+			} else {
+				distance += float64(iid)
+			}
+		}
 	}
-	return idList
+
+	return distance
 }
 
 // get the all leaf cell according to node's model
@@ -254,7 +305,7 @@ func (kss *KubeShareScheduler) calculateOpportunisticPodCellScore(nodeName strin
 
 	type CellScore struct {
 		cell  *Cell
-		score int32
+		score float64
 	}
 	scores := []*CellScore{}
 
@@ -267,12 +318,12 @@ func (kss *KubeShareScheduler) calculateOpportunisticPodCellScore(nodeName strin
 	if multiGPU {
 		for _, cell := range cellList {
 			if cell.available == 1 {
-				scores = append(scores, &CellScore{cell: cell, score: cell.priority})
+				scores = append(scores, &CellScore{cell: cell, score: float64(cell.priority)})
 			}
 		}
 	} else {
 		for _, cell := range cellList {
-			score := cell.priority + int32((1-cell.available)*100)
+			score := float64(cell.priority) + ((1 - cell.available) * 100)
 			scores = append(scores, &CellScore{cell: cell, score: score})
 		}
 	}
@@ -313,7 +364,7 @@ func (kss *KubeShareScheduler) calculateGuaranteePodCellScore(nodeName string, p
 
 	type CellScore struct {
 		cell  *Cell
-		score int32
+		score float64
 	}
 	scores := []*CellScore{}
 
@@ -323,45 +374,38 @@ func (kss *KubeShareScheduler) calculateGuaranteePodCellScore(nodeName string, p
 		cellList = kss.getAllLeafCellbyNode(nodeName)
 	}
 
-	stringID := kss.getCellIDFromPodGroup(podStatus.podGroup)
-	cellIDList := kss.convertCellID(stringID)
-	nGroup := len(cellIDList)
+	idGroup := kss.filterPodGroup(podStatus.podGroup) // kss.getCellIDFromPodGroup(podStatus.podGroup)
+	nGroup := float64(len(idGroup))
 
 	if multiGPU {
 		for _, cell := range cellList {
 			if cell.available == 1 {
-				score := cell.priority
+				score := float64(cell.priority)
 				if nGroup > 0 {
-					locality := 0
-					currentId := kss.parseCellID(cell.id)
-					for i, id := range cellIDList {
-						dis := id - currentId
-						if dis < 0 {
-							dis *= -1
-						}
+					locality := 0.0
+					currentId := strings.Split(cell.id, "/")
+					for _, id := range idGroup {
+						dis := kss.getCellIDDistance(currentId, id)
 						locality += dis
-						kss.ksl.Debugf("[Cell] distance %v <-> %v: %v", cell.id, stringID[i], dis)
+						kss.ksl.Debugf("[Cell] distance %v <-> %v: %v", cell.id, id, dis)
 					}
-					score -= int32(locality / nGroup)
+					score -= locality / nGroup * 100
 				}
 				scores = append(scores, &CellScore{cell: cell, score: score})
 			}
 		}
 	} else {
 		for _, cell := range cellList {
-			score := cell.priority - int32((1-cell.available)*100)
+			score := float64(cell.priority) - ((1 - cell.available) * 100)
 			if nGroup > 0 {
-				locality := 0
-				currentId := kss.parseCellID(cell.id)
-				for i, id := range cellIDList {
-					dis := id - currentId
-					if dis < 0 {
-						dis *= -1
-					}
+				locality := 0.0
+				currentId := strings.Split(cell.id, "/")
+				for _, id := range idGroup {
+					dis := kss.getCellIDDistance(currentId, id)
 					locality += dis
-					kss.ksl.Debugf("[Cell] distance %v <-> %v: %v", cell.id, stringID[i], dis)
+					kss.ksl.Debugf("[Cell] distance %v <-> %v: %v", cell.id, id, dis)
 				}
-				score -= int32((locality / nGroup) * 100)
+				score -= ((locality / nGroup) * 100)
 			}
 			scores = append(scores, &CellScore{cell: cell, score: score})
 		}

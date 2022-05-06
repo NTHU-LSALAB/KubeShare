@@ -412,13 +412,13 @@ func (kss *KubeShareScheduler) Score(ctx context.Context, state *framework.Cycle
 	_, needGPU, ps := kss.getPodLabels(pod)
 	// the pod does not need gpu
 	if !needGPU {
-		return kss.calculateRegularPodNodeScore(nodeName), framework.NewStatus(framework.Success, "")
+		return int64(kss.calculateRegularPodNodeScore(nodeName)), framework.NewStatus(framework.Success, "")
 	}
 
 	kss.cellMutex.RLock()
 	defer kss.cellMutex.RUnlock()
 
-	score := int64(0)
+	score := float64(0)
 	// opportunistic pod
 	if ps.priority <= 0 {
 		score = kss.calculateOpportunisticPodScore(nodeName, ps)
@@ -426,7 +426,7 @@ func (kss *KubeShareScheduler) Score(ctx context.Context, state *framework.Cycle
 		score = kss.calculateGuaranteePodScore(nodeName, ps)
 	}
 	kss.ksl.Debugf("[Score] Score %v: %v", nodeName, score)
-	return score, framework.NewStatus(framework.Success, "")
+	return int64(score), framework.NewStatus(framework.Success, "")
 }
 
 func (kss *KubeShareScheduler) ScoreExtensions() framework.ScoreExtensions {

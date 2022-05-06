@@ -79,8 +79,10 @@ func (kss *KubeShareScheduler) deletePod(obj interface{}) {
 			if port >= PodManagerPortStart {
 				kss.nodePodManagerPortBitmap[podStatus.nodeName].Unmask(port - PodManagerPortStart)
 			}
-			cell := podStatus.cells[0]
-			kss.reclaimResource(cell, request, memory)
+			if podStatus.cells != nil {
+				cell := podStatus.cells[0]
+				kss.reclaimResource(cell, request, memory)
+			}
 		}
 	} else {
 		kss.ksl.Infof("[DELETE POD] %v/%v(%v) is a shadow pod or regular pod, not need to reclaim resource", pod.Namespace, pod.Name, pod.UID)
@@ -277,8 +279,10 @@ func (kss *KubeShareScheduler) deletePodStatus(pod *v1.Pod) (*PodStatus, bool) {
 	defer kss.podStatusMutex.Unlock()
 
 	ps, ok := kss.podStatus[key]
-	kss.printPodStatus(ps)
-	kss.ksl.Debugf("[deletePodStatus] pod %v(%v) -> it status uid %v", key, pod.UID, ps.uid)
+	if ok {
+		kss.printPodStatus(ps)
+		kss.ksl.Debugf("[deletePodStatus] pod %v(%v) -> it status uid %v", key, pod.UID, ps.uid)
+	}
 	if ok && ps.uid == string(pod.UID) {
 		delete(kss.podStatus, key)
 		return ps, true

@@ -28,6 +28,20 @@ func (kss *KubeShareScheduler) printPodStatus(ps *PodStatus) {
 	kss.ksl.Debug("------------------------------------")
 }
 
+// func (kss *KubeShareScheduler) caculateTotalPods(namespace, podGroupName string) int {
+// 	pods, err := kss.podLister.Pods(namespace).FilteredList(func(pod *v1.Pod) bool {
+// 		if pod.Labels[PodGroupName] == podGroupName && pod.Namespace == namespace && (pod.Status.Phase == "Running" || ) {
+// 			return true
+// 		}
+// 		return false
+// 	}, labels.NewSelector())
+// 	if err != nil {
+// 		kss.ksl.Error(err)
+// 		return 0
+// 	}
+// 	return len(pods)
+// }
+
 func (kss *KubeShareScheduler) caculateTotalPods(namespace, podGroupName string) int {
 	pods, err := kss.podLister.Pods(namespace).List(labels.Set{PodGroupName: podGroupName}.AsSelector())
 	if err != nil {
