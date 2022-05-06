@@ -160,6 +160,10 @@ func (kss *KubeShareScheduler) setCellStatus(cell *Cell, healthy bool, nodeName 
 				if current.parent != nil {
 					childStack.Push(current)
 				}
+				kss.leafCellsMutex.Lock()
+				kss.leafCells[current.uuid] = current
+				kss.ksl.Debugf("Set leaf cell: %v -> %+v", current.uuid, kss.leafCells[current.uuid])
+				defer kss.leafCellsMutex.Unlock()
 			}
 
 			parent := current.parent

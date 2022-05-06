@@ -87,13 +87,13 @@ type KubeShareScheduler struct {
 	ksl       *logrus.Logger
 
 	// allocation
-	gpuPriority       map[string]int32 // key: model name ; val: priority
-	sortGPUByPriority []string
-	gpuInfos          map[string]map[string][]GPU // key: node name  ; val: {model, all information of gpu in the node}
-	cellFreeList      map[string]LevelCellList
-	cellMutex         *sync.RWMutex
-	leafCells         map[string]*Cell //key: uuid ; val: cell
-
+	gpuPriority                   map[string]int32 // key: model name ; val: priority
+	sortGPUByPriority             []string
+	gpuInfos                      map[string]map[string][]GPU // key: node name  ; val: {model, all information of gpu in the node}
+	cellFreeList                  map[string]LevelCellList
+	cellMutex                     *sync.RWMutex
+	leafCells                     map[string]*Cell //key: uuid ; val: cell
+	leafCellsMutex                *sync.RWMutex
 	nodePodManagerPortBitmap      map[string]*bitmap.RRBitmap
 	nodePodManagerPortBitmapMutex *sync.Mutex
 	// pod group
@@ -153,6 +153,8 @@ func New(config *runtime.Unknown, handle framework.FrameworkHandle) (framework.P
 		podGroupMutex:                 &sync.RWMutex{},
 		podStatus:                     map[string]*PodStatus{},
 		podStatusMutex:                &sync.RWMutex{},
+		leafCells:                     map[string]*Cell{},
+		leafCellsMutex:                &sync.RWMutex{},
 		ksl:                           ksl,
 		clock:                         util.RealClock{},
 	}
@@ -168,7 +170,7 @@ func New(config *runtime.Unknown, handle framework.FrameworkHandle) (framework.P
 	// 	ksl.Debugf("%+v = %+v", k, v)
 	// }
 	// ksl.Debugln("=================FREE CELL=================")
-	cellFreeList, leafCells := newCellConstructor(ce, kubeshareConfig.Cells, ksl).build()
+	cellFreeList := newCellConstructor(ce, kubeshareConfig.Cells, ksl).build()
 	// for k, v := range cellFreeList {
 	// 	ksl.Debugf("%+v = ", k)
 	// 	for l, cl := range v {
@@ -185,9 +187,6 @@ func New(config *runtime.Unknown, handle framework.FrameworkHandle) (framework.P
 	}
 
 	kss.cellFreeList = cellFreeList
-	kss.leafCells = leafCells
-
-	ksl.Debugf("size of leaf cell: %v", len(leafCells))
 
 	// try to comment the following two command before run TestPermit
 	stopCh := signals.SetupSignalHandler()

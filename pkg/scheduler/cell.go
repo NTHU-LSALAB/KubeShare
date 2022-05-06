@@ -198,7 +198,6 @@ type cellConstructor struct {
 
 	// output
 	cellFreeList map[string]LevelCellList
-	leafCells    map[string]*Cell
 
 	// logger
 	ksl *logrus.Logger
@@ -209,12 +208,11 @@ func newCellConstructor(cellElements map[string]*cellElement, cells []CellSpec, 
 		cellElements: cellElements,
 		cells:        cells,
 		cellFreeList: map[string]LevelCellList{},
-		leafCells:    map[string]*Cell{},
 		ksl:          ksl,
 	}
 }
 
-func (c *cellConstructor) build() (cellFreeList map[string]LevelCellList, leafCells map[string]*Cell) {
+func (c *cellConstructor) build() (cellFreeList map[string]LevelCellList) {
 	for _, spec := range c.cells {
 
 		rootCell := c.buildFullTree(spec.CellType, spec)
@@ -228,7 +226,7 @@ func (c *cellConstructor) build() (cellFreeList map[string]LevelCellList, leafCe
 		c.cellFreeList[cellType][cellLevel] = append(
 			c.cellFreeList[cellType][cellLevel], rootCell)
 	}
-	return c.cellFreeList, c.leafCells
+	return c.cellFreeList
 }
 
 func (c *cellConstructor) buildFullTree(buildingType string, buildingSpec CellSpec) *Cell {
@@ -267,7 +265,6 @@ func (c *cellConstructor) buildChildCell(
 
 	if ce.level == 1 {
 		c.ksl.Debugf("%+v", cellInstance)
-		c.leafCells[cellInstance.uuid] = cellInstance
 		return cellInstance
 	}
 
