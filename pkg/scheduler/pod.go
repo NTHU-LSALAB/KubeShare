@@ -1,6 +1,7 @@
 package scheduler
 
 import (
+	"KubeShare/pkg/lib/queue"
 	"bytes"
 	"context"
 	"fmt"
@@ -57,43 +58,23 @@ func (kss *KubeShareScheduler) addPod(obj interface{}) {
 			kss.printPodStatus(ps)
 			return
 		}
-
+		kss.getOrCreatePodGroupInfo(pod, time.Now())
 		// when scheduler is recreating, need to recalculate the resource
-		_, needGPU, ps := kss.getPodLabels(pod)
+		_, needGPU := pod.Annotations[PodGPUMemory]
 		// regular pod
 		if !needGPU {
 			return
 		}
 
-		kss.getOrCreatePodGroupInfo(pod, time.Now())
+		kss.boundPodQueueMutex.Lock()
+		defer kss.boundPodQueueMutex.Unlock()
+		if kss.boundPodQueue[pod.Spec.NodeName] == nil {
+			kss.boundPodQueue[pod.Spec.NodeName] = queue.NewQueue()
 
-		labelMemory := pod.Annotations[PodGPUMemory]
-		memory, err := strconv.ParseInt(labelMemory, 10, 64)
-		if err != nil {
-			kss.ksl.Errorf("[addPod] error when coverting memory, %v", err)
-			return
 		}
+		kss.ksl.Infof("[Sync Resource] add pod %v/%v(%v) to bound queue", pod.Namespace, pod.Name, pod.UID)
+		kss.boundPodQueue[pod.Spec.NodeName].Enqueue(pod)
 
-		request := ps.request
-		multiGPU := request > 1.0
-
-		if len(ps.cells) == 0 {
-			kss.setPodStatus(pod, ps, request, memory)
-		}
-
-		if !multiGPU {
-			port, err := strconv.Atoi(pod.Annotations[PodManagerPort])
-			if err != nil {
-				kss.ksl.Errorf("[addPod] error when coverting port, %v", err)
-				return
-			}
-			ps.port = int32(port)
-			if port >= PodManagerPortStart {
-				kss.nodePodManagerPortBitmap[ps.nodeName].Mask(port - PodManagerPortStart)
-			}
-		}
-		kss.ksl.Infof("[Sync Resource] the status of %v/%v(%v) is set up.", pod.Namespace, pod.Name, pod.UID)
-		kss.printPodStatus(ps)
 	}
 }
 
@@ -518,6 +499,59 @@ func (kss *KubeShareScheduler) reclaimResource(cell *Cell, request float64, memo
 	}
 }
 
+func (kss *KubeShareScheduler) processBoundPodQueue(nodeName string) {
+	kss.ksl.Debugf("[processBoundPodQueue] node: %v", nodeName)
+	kss.boundPodQueueMutex.Lock()
+	defer kss.boundPodQueueMutex.Unlock()
+	q := kss.boundPodQueue[nodeName]
+
+	if q == nil {
+		return
+	}
+	kss.ksl.Debugf("[processBoundPodQueue] node: %v, length of Q: %v", nodeName, q.Len())
+	for q.Len() > 0 {
+		pod := q.Dequeue().(*v1.Pod)
+		kss.processBoundPod(pod)
+	}
+}
+
+func (kss *KubeShareScheduler) processBoundPod(pod *v1.Pod) {
+	kss.ksl.Debugf("[processBoundPod] pod: %v/%v(%v)", pod.Namespace, pod.Name, pod.UID)
+	//key := fmt.Sprintf("%v/%v", pod.Namespace, pod.Name)
+	_, _, ps := kss.getPodLabels(pod)
+	if ps == nil {
+		kss.ksl.Errorf("[processBoundPod] error when get pod status")
+		return
+	}
+	labelMemory := pod.Annotations[PodGPUMemory]
+	memory, err := strconv.ParseInt(labelMemory, 10, 64)
+	if err != nil {
+		kss.ksl.Errorf("[processBoundPod] error when coverting memory, %v", err)
+		return
+	}
+
+	request := ps.request
+	multiGPU := request > 1.0
+
+	if len(ps.cells) == 0 {
+		kss.setPodStatus(pod, ps, request, memory)
+	}
+
+	if !multiGPU {
+		port, err := strconv.Atoi(pod.Annotations[PodManagerPort])
+		if err != nil {
+			kss.ksl.Errorf("[processBoundPod] error when coverting port, %v", err)
+			return
+		}
+		ps.port = int32(port)
+		if port >= PodManagerPortStart {
+			kss.nodePodManagerPortBitmap[ps.nodeName].Mask(port - PodManagerPortStart)
+		}
+	}
+	kss.ksl.Infof("[processBoundPod] the status of %v/%v(%v) is set up.", pod.Namespace, pod.Name, pod.UID)
+	kss.printPodStatus(ps)
+}
+
 func (kss *KubeShareScheduler) setPodStatus(pod *v1.Pod, podStatus *PodStatus, request float64, memory int64) {
 	kss.ksl.Errorf("[setPodStatus] pod %v/%v(%v)", pod.Namespace, pod.Name, pod.UID)
 	rawUUID := pod.Annotations[PodGPUUUID]
@@ -530,7 +564,7 @@ func (kss *KubeShareScheduler) setPodStatus(pod *v1.Pod, podStatus *PodStatus, r
 
 	for _, uuid := range uuidList {
 		cell := kss.leafCells[uuid]
-		kss.ksl.Debugf("Find uuid %v map to cell %v", uuid, cell)
+		kss.ksl.Debugf("[setPodStatus] Find uuid %v map to cell %v", uuid, cell)
 		if cell != nil {
 			cells = append(cells, cell)
 			if multiGPU {
@@ -549,6 +583,6 @@ func (kss *KubeShareScheduler) setPodStatus(pod *v1.Pod, podStatus *PodStatus, r
 	podCopy.Annotations[PodCellID] = cellIDs.String()
 	podCopy, err := kss.handle.ClientSet().CoreV1().Pods(podCopy.Namespace).Update(context.Background(), podCopy, metav1.UpdateOptions{})
 	if err != nil {
-		kss.ksl.Errorf("Pod %v/%v update cell id error: %v", podCopy.Namespace, podCopy.Name, err)
+		kss.ksl.Errorf("[setPodStatus] Pod %v/%v update cell id error: %v", podCopy.Namespace, podCopy.Name, err)
 	}
 }

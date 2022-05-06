@@ -28,6 +28,7 @@ import (
 
 	// KubeShare
 	"KubeShare/pkg/lib/bitmap"
+	"KubeShare/pkg/lib/queue"
 	"KubeShare/pkg/logger"
 	"KubeShare/pkg/signals"
 )
@@ -105,6 +106,9 @@ type KubeShareScheduler struct {
 	// pod status
 	podStatus      map[string]*PodStatus // key: namespace/name ; value: pod status
 	podStatusMutex *sync.RWMutex
+	// bound pod queue
+	boundPodQueue      map[string]*queue.Queue
+	boundPodQueueMutex *sync.RWMutex
 }
 
 // initializes a new plugin and returns it
@@ -157,6 +161,8 @@ func New(config *runtime.Unknown, handle framework.FrameworkHandle) (framework.P
 		leafCellsMutex:                &sync.RWMutex{},
 		ksl:                           ksl,
 		clock:                         util.RealClock{},
+		boundPodQueue:                 map[string]*queue.Queue{},
+		boundPodQueueMutex:            &sync.RWMutex{},
 	}
 	// gpu topology
 	kubeshareConfig := kss.initRawConfig()
@@ -325,8 +331,9 @@ func (kss *KubeShareScheduler) PreFilterExtensions() framework.PreFilterExtensio
 
 // filter the node that doesn't meet the gpu requirements.
 func (kss *KubeShareScheduler) Filter(ctx context.Context, state *framework.CycleState, pod *v1.Pod, node *schedulernodeinfo.NodeInfo) *framework.Status {
-
 	nodeName := node.Node().Name
+
+	kss.processBoundPodQueue(nodeName)
 
 	kss.ksl.Infof("[Filter] pod: %v/%v(%v) in node %v", pod.Namespace, pod.Name, pod.UID, nodeName)
 
@@ -338,6 +345,12 @@ func (kss *KubeShareScheduler) Filter(ctx context.Context, state *framework.Cycl
 	}
 
 	// check if the port in the node is sufficient
+	if kss.nodePodManagerPortBitmap[nodeName] == nil {
+		kss.nodePodManagerPortBitmapMutex.Lock()
+		defer kss.nodePodManagerPortBitmapMutex.Unlock()
+		kss.nodePodManagerPortBitmap[nodeName] = bitmap.NewRRBitmap(512)
+		kss.nodePodManagerPortBitmap[nodeName].Mask(0)
+	}
 	port := kss.nodePodManagerPortBitmap[nodeName].FindNextFromCurrent() + PodManagerPortStart
 	kss.ksl.Debugf("[Filter] Port: %v", port)
 	if port == -1 {

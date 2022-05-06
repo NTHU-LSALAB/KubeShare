@@ -62,5 +62,7 @@ func (q *Queue) Dequeue() interface{} {
 }
 
 func (q *Queue) Len() int {
+	q.lock.Lock()
+	defer q.lock.Unlock()
 	return q.length
 }

@@ -163,7 +163,7 @@ func (kss *KubeShareScheduler) setCellStatus(cell *Cell, healthy bool, nodeName 
 				kss.leafCellsMutex.Lock()
 				kss.leafCells[current.uuid] = current
 				kss.ksl.Debugf("Set leaf cell: %v -> %+v", current.uuid, kss.leafCells[current.uuid])
-				defer kss.leafCellsMutex.Unlock()
+				kss.leafCellsMutex.Unlock()
 			}
 
 			parent := current.parent
