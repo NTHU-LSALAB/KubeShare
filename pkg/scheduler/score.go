@@ -175,9 +175,9 @@ func (kss *KubeShareScheduler) getCellIDDistance(current []string, id string) fl
 			iid, err2 := strconv.Atoi(idList[i])
 			if err1 != nil || err2 != nil {
 				tmpC, tmpI := current[j], idList[i]
-				kss.ksl.Warnf("[parseCellID] convert error, its node ID-> %v vs %v", tmpC, tmpI)
-				if tmpC == tmpI {
-					return distance
+				kss.ksl.Warnf("[parseCellID] covert node name-> %v vs %v", tmpC, tmpI)
+				if tmpC != tmpI {
+					distance += 0.5
 				}
 			} else {
 				distance += math.Abs(float64(cur) - float64(iid))
@@ -189,6 +189,7 @@ func (kss *KubeShareScheduler) getCellIDDistance(current []string, id string) fl
 			cur, err1 := strconv.Atoi(current[j])
 			if err1 != nil {
 				kss.ksl.Errorf("[parseCellID] convert error: %v", err1)
+				distance += 0.5
 			} else {
 				distance += float64(cur)
 			}
@@ -201,9 +202,9 @@ func (kss *KubeShareScheduler) getCellIDDistance(current []string, id string) fl
 			iid, err2 := strconv.Atoi(idList[i])
 			if err1 != nil || err2 != nil {
 				tmpC, tmpI := current[j], idList[i]
-				kss.ksl.Warnf("[parseCellID] convert error, its node ID-> %v vs %v", tmpC, tmpI)
-				if tmpC == tmpI {
-					return distance
+				kss.ksl.Warnf("[parseCellID] covert node name-> %v vs %v", tmpC, tmpI)
+				if tmpC != tmpI {
+					distance += 0.5
 				}
 			} else {
 				distance += math.Abs(float64(cur) - float64(iid))
@@ -215,6 +216,7 @@ func (kss *KubeShareScheduler) getCellIDDistance(current []string, id string) fl
 			iid, err2 := strconv.Atoi(idList[i])
 			if err2 != nil {
 				kss.ksl.Errorf("[parseCellID] convert error: %v", err2)
+				distance += 0.5
 			} else {
 				distance += float64(iid)
 			}
