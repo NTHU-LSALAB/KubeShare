@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -48,6 +49,10 @@ func (c *Config) convertData(result []model.LabelSet) (map[string][]string, map[
 		namespace := res["exported_namespace"]
 		name := res["exported_pod"]
 
+		request, err := strconv.ParseFloat(string(res["request"]), 64)
+		if err != nil || request > 1.0 {
+			continue
+		}
 		gpuData := fmt.Sprintf("%v/%v %v %v %v\n", namespace, name, res["limit"], res["request"], res["memory"])
 		portData := fmt.Sprintf("%v/%v %v\n", namespace, name, res["port"])
 
