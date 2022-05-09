@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	// nvidia toolkit
-	"github.com/NVIDIA/gpu-monitoring-tools/bindings/go/nvml"
+	"github.com/NVIDIA/go-nvml/pkg/nvml"
 
 	// prometheus
 
@@ -39,8 +39,8 @@ func main() {
 
 	/* load the nvidia toolkit */
 	ksl.Println("Loading NVML")
-	if err := nvml.Init(); err != nil {
-		ksl.Warnf("Faild to initialize NVML: %s.", err)
+	if ret := nvml.Init(); ret != nvml.SUCCESS {
+		ksl.Warnf("Faild to initialize NVML: %s.", nvml.ErrorString(ret))
 		ksl.Warnf("If this is a GPU node, did you set the docker default runtime to `nvidia`?")
 		ksl.Warnf("You can check the prerequisites at: https://github.com/NVIDIA/k8s-device-plugin#prerequisites")
 		ksl.Warnf("You can learn how to set the runtime at: https://github.com/NVIDIA/k8s-device-plugin#quick-start")
@@ -48,7 +48,7 @@ func main() {
 		select {}
 	}
 
-	defer func() { ksl.Errorln("Shutdown of NVML returned: ", nvml.Shutdown()) }()
+	defer func() { ksl.Errorln("Shutdown of NVML returned: ", nvml.ErrorString(nvml.Shutdown())) }()
 
 	/* prometheus exporter */
 	collector := collector.NewCollector(ksl)

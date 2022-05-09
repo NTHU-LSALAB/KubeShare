@@ -21,6 +21,8 @@ github.com/MakeNowJust/heredoc v0.0.0-20170808103936-bb23615498cd/go.mod h1:64YH
 github.com/Masterminds/semver v1.5.0/go.mod h1:MB6lktGJrhw8PrUyiEoblNEGEQ+RzHPF078ddwwvV3Y=
 github.com/Microsoft/go-winio v0.4.14/go.mod h1:qXqCSQ3Xa7+6tgxaGTIe4Kpcdsi+P8jBhyzoq1bpyYA=
 github.com/Microsoft/hcsshim v0.0.0-20190417211021-672e52e9209d/go.mod h1:Op3hHsoHPAvb6lceZHDtd9OkTew38wNoXnJs8iY7rUg=
+github.com/NVIDIA/go-nvml v0.11.6-0 h1:tugQzmaX84Y/6+03wZ/MAgcpfSKDkvkAWeuxFNLHmxY=
+github.com/NVIDIA/go-nvml v0.11.6-0/go.mod h1:hy7HYeQy335x6nEss0Ne3PYqleRa6Ct+VKD9RQ4nyFs=
 github.com/NVIDIA/gpu-monitoring-tools v0.0.0-20210817155834-f476d8a022cf h1:t4TOchUA16QIQK8CoaMktjM6ZZbM3ODOfbLKKHs5a50=
 github.com/NVIDIA/gpu-monitoring-tools v0.0.0-20210817155834-f476d8a022cf/go.mod h1:oKPJa5eOTkWvlT4/Y4D8Nds44Fzmww5HUK+xwO+DwTA=
 github.com/NVIDIA/gpu-monitoring-tools/bindings/go/dcgm v0.0.0-20210325210537-29b4f1784f18/go.mod h1:8qXwltEzU3idjUcVpMOv3FNgxxbDeXZPGMLyc/khWiY=

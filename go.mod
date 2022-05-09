@@ -3,6 +3,7 @@ module KubeShare
 go 1.15
 
 require (
+	github.com/NVIDIA/go-nvml v0.11.6-0
 	github.com/NVIDIA/gpu-monitoring-tools v0.0.0-20210817155834-f476d8a022cf
 	github.com/fsnotify/fsnotify v1.4.9
 	github.com/go-chi/chi v1.5.4
