@@ -340,7 +340,7 @@ func (kss *KubeShareScheduler) calculateOpportunisticPodCellScore(nodeName strin
 			finalList = append(finalList, cell)
 			request -= 1.0
 		} else {
-			if cell.available > request && cell.freeMemory > memory {
+			if cell.available >= request && cell.freeMemory >= memory {
 				finalList = append(finalList, cell)
 				request = 0
 			}
@@ -423,7 +423,7 @@ func (kss *KubeShareScheduler) calculateGuaranteePodCellScore(nodeName string, p
 			finalList = append(finalList, cell)
 			request -= 1.0
 		} else {
-			if cell.available > request && cell.freeMemory > memory {
+			if cell.available >= request && cell.freeMemory >= memory {
 				finalList = append(finalList, cell)
 				request = 0
 			}

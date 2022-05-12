@@ -2,6 +2,7 @@ package collector
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/NVIDIA/go-nvml/pkg/nvml"
 )
@@ -55,7 +56,7 @@ func (c *Collector) getDevices() []*GPU {
 			if ret != nvml.SUCCESS {
 				fmt.Errorf("Unable to get model of device at index %d: %v", i, nvml.ErrorString(ret))
 			}
-			device.GetMigDeviceHandleByIndex(0)
+			model = strings.ReplaceAll(model, " ", "-")
 			gpu := GPU{
 				model:  model,
 				uuid:   uuid,
@@ -87,7 +88,7 @@ func (c *Collector) getDevices() []*GPU {
 				if ret != nvml.SUCCESS {
 					fmt.Errorf("Unable to get model of mig device at index %d: %v", j, nvml.ErrorString(ret))
 				}
-
+				model = strings.ReplaceAll(model, " ", "-")
 				gpu := GPU{
 					model:  model,
 					uuid:   uuid,

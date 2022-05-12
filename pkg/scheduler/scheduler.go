@@ -509,6 +509,9 @@ func (kss *KubeShareScheduler) Reserve(ctx context.Context, state *framework.Cyc
 		ps.cells = kss.calculateGuaranteePodCellScore(nodeName, ps)
 		kss.ksl.Debugf("[Reserve] pod cell for Guarantee: %+v", ps.cells)
 	}
+	if len(ps.cells) <= 0 {
+		framework.NewStatus(framework.Unschedulable, "Pod can not reserve resource")
+	}
 	var podCopy *v1.Pod
 	if multiGPU {
 		podCopy = kss.newAssumedMultiGPUPod(pod, nodeName)

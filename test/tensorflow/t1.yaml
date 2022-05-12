@@ -1,0 +1,29 @@
+# Test:
+#    gpu_request and gpu_limit correct
+apiVersion: v1
+kind: Pod
+metadata:
+  name: t1
+  labels:
+    "sharedgpu/gpu_request": "1.0"
+    "sharedgpu/gpu_limit": "1.0"
+    "sharedgpu/gpu_model": "NVIDIA-GeForce-GTX-1080"
+spec:
+  schedulerName: kubeshare-scheduler
+  restartPolicy: Never
+  containers:
+    - name: t1
+      image:  tensorflow/tensorflow:2.4.0-gpu
+      command: ["sh", "-c", "sleep infinity"]
+      imagePullPolicy: IfNotPresent
+      resources:
+        limits:
+          cpu: "1"
+          memory: "4Gi"
+      volumeMounts:
+      - name: datasets
+        mountPath: "/workspace/datasets"
+  volumes:
+    - name: datasets
+      hostPath:
+        path: "/home/riya/experiment/datasets"

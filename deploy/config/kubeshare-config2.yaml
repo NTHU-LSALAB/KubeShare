@@ -1,0 +1,41 @@
+cellTypes:
+  GTX1080-1NODE:
+   childCellType: "NVIDIA GeForce GTX 1080"
+   childCellNumber: 1
+   childCellPriority: 100
+   isNodeLevel: true
+  GTX1080-2NODE:
+    childCellType: "NVIDIA GeForce GTX 1080"
+    childCellNumber: 2
+    childCellPriority: 100
+    isNodeLevel: true
+  3-GTX1080-NODE:
+    childCellType: GTX1080-2NODE
+    childCellNumber: 3
+  RTX2070-NODE:
+    childCellType: "NVIDIA GeForce RTX 2070"
+    childCellNumber: 1
+    childCellPriority: 20
+    isNodeLevel: true
+  RTX2080Ti-NODE:
+    childCellType: "GeForce RTX 2080 Ti"
+    childCellNumber: 1
+    childCellPriority: 10
+    isNodeLevel: true
+  2-RTX2080Ti-NODE:
+    childCellType: RTX2080Ti-NODE
+    childCellNumber: 2
+cells:
+- cellType: 3-GTX1080-NODE
+  cellChildren:
+  - cellId: juno
+  - cellId: apple
+  - cellId: lemon
+- cellType: RTX2070-NODE
+  cellId: cupid
+- cellType: 2-RTX2080Ti-NODE
+  cellChildren:
+  - cellId: grape
+  - cellId: orange
+- cellType: GTX1080-1NODE
+  cellId: test
