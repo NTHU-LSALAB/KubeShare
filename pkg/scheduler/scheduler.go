@@ -480,13 +480,14 @@ func (kss *KubeShareScheduler) NormalizeScore(ctx context.Context, state *framew
 
 	ratio := maxScore - minScore
 	defaultRatio := framework.MaxNodeScore - framework.MinNodeScore
+	defaultMinScore := framework.MinNodeScore
 	if ratio == 0 {
 		ratio = 100
 	}
 	for i, node := range scores {
 		name := scores[i].Name
 		kss.ksl.Debugf("Before Score %v: %v", name, scores[i].Score)
-		scores[i].Score = node.Score / ratio * defaultRatio
+		scores[i].Score = (int64(defaultRatio) * (int64(node.Score) - minScore) / ratio) + defaultMinScore //node.Score / ratio * defaultRatio
 		kss.ksl.Debugf("After Score %v: %v", name, scores[i].Score)
 	}
 
