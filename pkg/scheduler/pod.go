@@ -107,7 +107,7 @@ func (kss *KubeShareScheduler) deletePod(obj interface{}) {
 			if port >= PodManagerPortStart {
 				kss.nodePodManagerPortBitmap[podStatus.nodeName].Unmask(port - PodManagerPortStart)
 			}
-			if podStatus.cells != nil {
+			if len(podStatus.cells) != 0 {
 				cell := podStatus.cells[0]
 				kss.reclaimResource(cell, request, memory)
 			}

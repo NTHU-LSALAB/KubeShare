@@ -7,15 +7,15 @@ metadata:
   labels:
     "sharedgpu/gpu_request": "1"
     "sharedgpu/gpu_limit": "1.0"
-    "sharedgpu/priority": "100"
-    "sharedgpu/gpu_model": "NVIDIA-GeForce-GTX-1080"
+    #"sharedgpu/priority": "100"
+    #"sharedgpu/gpu_model": "NVIDIA-GeForce-GTX-1080"
 spec:
   schedulerName: kubeshare-scheduler
   restartPolicy: Never
   containers:
     - name: pytorch
       image:  riyazhu/mnist:test
-      command: ["sh", "-c", "sleep infinity"]
+      #command: ["sh", "-c", "sleep infinity"]
       imagePullPolicy: Always #IfNotPresent
       volumeMounts:
       - name: datasets

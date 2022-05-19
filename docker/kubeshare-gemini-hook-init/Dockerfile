@@ -1,6 +1,6 @@
 # call from repo root
 
-FROM nvidia/cuda:11.4.0-devel-ubuntu18.04 AS build 
+FROM nvidia/cuda:11.2.2-devel-ubuntu16.04 AS build 
 # nvidia/cuda:10.0-devel
 
 WORKDIR /tmp/build
@@ -10,7 +10,7 @@ WORKDIR /tmp/build
 COPY ./Gemini Gemini
 
 RUN cd Gemini && \
-    make -C src CUDA_PATH=/usr/local/cuda/
+    make -C src CUDA_PATH=/usr/local/cuda/ DEBUG=1
 
 # RUN apt update && \
 #     apt install -y git && \
@@ -25,3 +25,4 @@ FROM alpine:3.9
 
 COPY --from=build /tmp/build/Gemini/lib/libgemhook.so.1 /libgemhook.so.1
 CMD ["cp", "/libgemhook.so.1", "/kubeshare/library/libgemhook.so.1"]
+

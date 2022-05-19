@@ -64,7 +64,7 @@ spec:
         - name: "kubeshare-library"
           mountPath: /kubeshare/library
       - name: gemini-hook-init
-        image: riyazhu/kubeshare-gemini-hook-init:db  #20211108 #20210706124950 #ncy9371/kubeshare-gemini-hook-init:20200429135835
+        image:  cjobr/kubeshare-gemini-hook-init:20220401 #riyazhu/kubeshare-gemini-hook-init:db  #20211108 #20210706124950 #ncy9371/kubeshare-gemini-hook-init:20200429135835
         imagePullPolicy: Always
         volumeMounts:
         - name: "kubeshare-library"
@@ -93,7 +93,7 @@ spec:
         - name: "kubeshare-log"
           mountPath: "/kubeshare/log"
       - name: gemini-scheduler
-        image: riyazhu/kubeshare-gemini-scheduler:db #20210706124950 #ncy9371/kubeshare-gemini-scheduler:20200429135835
+        image: cjobr/kubeshare-gemini-scheduler:20220127 #riyazhu/kubeshare-gemini-scheduler:db #20210706124950 #ncy9371/kubeshare-gemini-scheduler:20200429135835
         imagePullPolicy: Always
         volumeMounts:
         - name: "kubeshare-scheduler"

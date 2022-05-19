@@ -3,7 +3,7 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: mnist2
+  name: cifar10
   labels:
     "sharedgpu/gpu_request": "1"
     "sharedgpu/gpu_limit": "1.0"
@@ -14,7 +14,7 @@ spec:
   restartPolicy: Never
   containers:
     - name: pytorch
-      image:  riyazhu/mnist:test
+      image:  riyazhu/cifar10:test
       command: ["sh", "-c", "sleep infinity"]
       imagePullPolicy: Always #IfNotPresent
       volumeMounts:
