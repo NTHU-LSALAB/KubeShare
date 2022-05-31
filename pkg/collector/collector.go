@@ -30,7 +30,7 @@ func NewCollector(ksl *logrus.Logger) *Collector {
 		metric: prometheus.NewDesc(
 			"gpu_capacity",
 			"GPU information (in Byte).",
-			[]string{"node", "uuid", "model", "memory"},
+			[]string{"node", "uuid", "model", "memory", "index"},
 			nil),
 	}
 }
@@ -44,7 +44,8 @@ func (c *Collector) Collect(ch chan<- prometheus.Metric) {
 
 	c.ksl.Debugf("Node: %v is updeated at time %v", nodeName, time.Now().Unix())
 
-	for _, device := range devices {
+	for i, device := range devices {
+		c.ksl.Debugf("Currently, device %v: %v", i, device.index)
 		ch <- prometheus.MustNewConstMetric(
 			c.metric,
 			prometheus.CounterValue,
@@ -52,7 +53,8 @@ func (c *Collector) Collect(ch chan<- prometheus.Metric) {
 			nodeName,
 			device.uuid,
 			device.model,
-			strconv.FormatUint(device.memory, 10))
+			strconv.FormatUint(device.memory, 10),
+			strconv.Itoa(device.index))
 
 	}
 }

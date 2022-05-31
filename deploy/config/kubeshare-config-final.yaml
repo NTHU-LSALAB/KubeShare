@@ -1,0 +1,31 @@
+cellTypes:
+  GTX1080-NODE:
+    childCellType: "NVIDIA-GeForce-GTX-1080"
+    childCellNumber: 2
+    childCellPriority: 11
+    isNodeLevel: true
+  RTX2070-NODE:
+    childCellType: "NVIDIA-GeForce-RTX-2070"
+    childCellNumber: 1
+    childCellPriority: 1
+    isNodeLevel: true
+  V100-PCIE-NODE:
+    childCellType: "Tesla-V100-PCIE-32GB"
+    childCellNumber: 4
+    childCellPriority: 100
+    isNodeLevel: true
+  2-V100-NODE:
+    childCellType: V100-PCIE-NODE
+    childCellNumber: 2
+cells:
+- cellType: GTX1080-NODE
+  cellId: juno
+- cellType: RTX2070-NODE
+  cellId: cupid
+- cellType: 2-V100-NODE
+  cellChildren:
+  - cellId: ubuntu
+  - cellId: ubuntu
+
+
+#nvidia-smi topo --matrix

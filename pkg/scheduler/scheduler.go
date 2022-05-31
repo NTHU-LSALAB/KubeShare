@@ -403,7 +403,7 @@ func (kss *KubeShareScheduler) Filter(ctx context.Context, state *framework.Cycl
 		fit, currentAvailable, currentMemory := kss.filterNode(nodeName, model, request, memory)
 		available += currentAvailable
 		freeMemory += currentMemory
-		if ok = ok || fit; ok || (available >= request && freeMemory >= memory) {
+		if ok = (ok || fit); ok || (available >= request && freeMemory >= memory) {
 			kss.ksl.Infof("Node %v meet the gpu requirement of pod %v/%v(%v) in Filter", nodeName, pod.Namespace, pod.Name, pod.UID)
 			return framework.NewStatus(framework.Success, "")
 		}

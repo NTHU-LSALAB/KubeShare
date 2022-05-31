@@ -128,7 +128,6 @@ func (kss *KubeShareScheduler) setCellStatus(cell *Cell, healthy bool, nodeName 
 		return
 	}
 
-	childStack := NewStack()
 	s := NewStack()
 	s.Push(cell)
 
@@ -156,9 +155,10 @@ func (kss *KubeShareScheduler) setCellStatus(cell *Cell, healthy bool, nodeName 
 				current.fullMemory = GPUs[idx].memory
 				current.freeMemory = current.fullMemory
 				idx++
-				kss.ksl.Debugf("Level 1: %+v", current)
+				kss.ksl.Debugf("Level 1: idx: %v, %+v", idx-1, current)
 				if current.parent != nil {
-					childStack.Push(current)
+					// pass child cells' gpu memory to parent cells
+					kss.passMemoryToParent(current)
 				}
 				kss.leafCellsMutex.Lock()
 				kss.leafCells[current.uuid] = current
@@ -187,8 +187,6 @@ func (kss *KubeShareScheduler) setCellStatus(cell *Cell, healthy bool, nodeName 
 		}
 	}
 
-	// pass child cells gpu memory to parent cells
-	kss.passMemoryToParent(childStack)
 }
 
 // set the cell healthy according to the specified node status
@@ -245,25 +243,31 @@ func (kss *KubeShareScheduler) setCellHealthy(cell *Cell, healthy bool, nodeName
 }
 
 // pass child cells gpu memory to parent cells
-func (kss *KubeShareScheduler) passMemoryToParent(s *Stack) {
+func (kss *KubeShareScheduler) passMemoryToParent(cell *Cell) {
 	kss.ksl.Debugf("[passMemoryToParent]")
-	for s.Len() > 0 {
-		childNum := s.Len()
-		memory := int64(0)
 
-		for i := 0; i < childNum; i++ {
-			child := s.Pop()
-			kss.ksl.Debugf("passMemoryToParent - child: %+v", child)
-			memory += child.fullMemory
-			if i == childNum-1 {
-				parent := child.parent
-				parent.freeMemory += memory
-				parent.fullMemory += memory
-				if parent.parent != nil {
-					s.Push(parent)
-				}
-				kss.ksl.Debugf("passMemoryToParent -parent: %+v", parent)
+	s := NewStack()
+	s.Push(cell)
+
+	isChild := true
+	memory := int64(0)
+	for s.Len() > 0 {
+
+		current := s.Pop()
+		if isChild {
+			isChild = false
+			memory = current.fullMemory
+			kss.ksl.Debugf("passMemoryToParent - child: %+v", current)
+		}
+
+		if current.parent != nil {
+			parent := current.parent
+			parent.freeMemory += memory
+			parent.fullMemory += memory
+			if parent.parent != nil {
+				s.Push(parent)
 			}
+			kss.ksl.Debugf("passMemoryToParent -parent: %+v", parent)
 		}
 
 	}

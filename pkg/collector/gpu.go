@@ -11,6 +11,7 @@ type GPU struct {
 	model  string
 	uuid   string
 	memory uint64
+	index  int
 }
 
 // func init() {
@@ -61,6 +62,7 @@ func (c *Collector) getDevices() []*GPU {
 				model:  model,
 				uuid:   uuid,
 				memory: memory.Total,
+				index:  i,
 			}
 			devices[i] = &gpu
 			fmt.Printf("GPU %+v is added.", gpu)
@@ -93,6 +95,7 @@ func (c *Collector) getDevices() []*GPU {
 					model:  model,
 					uuid:   uuid,
 					memory: memory.Total,
+					index:  i,
 				}
 				devices[i] = &gpu
 				fmt.Printf("GPU %+v is added.", gpu)

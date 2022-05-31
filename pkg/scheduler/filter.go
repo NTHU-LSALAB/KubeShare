@@ -42,7 +42,8 @@ func (kss *KubeShareScheduler) checkCellResource(cell *Cell, nodeName string, re
 	}
 
 	multiGPU := request > 1.0
-
+	availableWholeCell := float64(0.0)
+	freeMemory := int64(0)
 	for s.Len() > 0 {
 		current := s.Pop()
 		kss.ksl.Debugf("Check resource cell: %+v", current)
@@ -50,12 +51,10 @@ func (kss *KubeShareScheduler) checkCellResource(cell *Cell, nodeName string, re
 		if current.node == nodeName && current.healthy {
 			// only need whole gpu
 			if multiGPU {
-				availableWholeCell := current.availableWholeCell
-				freeMemory := current.freeMemory
+				availableWholeCell += current.availableWholeCell
+				freeMemory += current.freeMemory
 				if availableWholeCell >= request && freeMemory >= memory {
 					return true, availableWholeCell, freeMemory
-				} else {
-					return false, availableWholeCell, freeMemory
 				}
 			} else {
 				if current.level == 1 && current.available >= request && current.freeMemory >= memory {
@@ -77,7 +76,13 @@ func (kss *KubeShareScheduler) checkCellResource(cell *Cell, nodeName string, re
 			}
 		}
 	}
-	return false, 0, 0
+
+	if multiGPU {
+		return false, availableWholeCell, freeMemory
+	} else {
+		return false, 0, 0
+	}
+
 }
 
 // check if the gpu resource in the node can fit the pod requirement
