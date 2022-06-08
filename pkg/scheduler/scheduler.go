@@ -214,7 +214,7 @@ func New(config *runtime.Unknown, handle framework.FrameworkHandle) (framework.P
 	podInformer := handle.SharedInformerFactory().Core().V1().Pods().Informer()
 	podInformer.AddEventHandler(
 		cache.FilteringResourceEventHandler{
-			FilterFunc: filterPod,
+			FilterFunc: kss.filterPod,
 			Handler: cache.ResourceEventHandlerFuncs{
 				AddFunc: kss.addPod,
 				//UpdateFunc: kss.updatePod,
@@ -333,6 +333,7 @@ func (kss *KubeShareScheduler) PreFilterExtensions() framework.PreFilterExtensio
 func (kss *KubeShareScheduler) Filter(ctx context.Context, state *framework.CycleState, pod *v1.Pod, node *schedulernodeinfo.NodeInfo) *framework.Status {
 	nodeName := node.Node().Name
 
+	kss.addNode(node.Node())
 	kss.processBoundPodQueue(nodeName)
 
 	kss.ksl.Infof("[Filter] pod: %v/%v(%v) in node %v", pod.Namespace, pod.Name, pod.UID, nodeName)
@@ -404,11 +405,12 @@ func (kss *KubeShareScheduler) Filter(ctx context.Context, state *framework.Cycl
 		available += currentAvailable
 		freeMemory += currentMemory
 		if ok = (ok || fit); ok || (available >= request && freeMemory >= memory) {
-			kss.ksl.Infof("Node %v meet the gpu requirement of pod %v/%v(%v) in Filter", nodeName, pod.Namespace, pod.Name, pod.UID)
+			kss.ksl.Infof("[Filter] Node %v meet the gpu requirement of pod %v/%v(%v) in Filter", nodeName, pod.Namespace, pod.Name, pod.UID)
+			kss.ksl.Infof("[Filter] Node %v request %v available %v, memory %v available %v", nodeName, request, available, memory, freeMemory)
 			return framework.NewStatus(framework.Success, "")
 		}
 	}
-	msg := fmt.Sprintf("Node %v doesn't meet the gpu request of pod %v/%v(%v) in Filter", nodeName, pod.Namespace, pod.Name, pod.UID)
+	msg := fmt.Sprintf("[Filter] Node %v doesn't meet the gpu request of pod %v/%v(%v) in Filter", nodeName, pod.Namespace, pod.Name, pod.UID)
 	kss.ksl.Infof(msg)
 	return framework.NewStatus(framework.Unschedulable, msg)
 }

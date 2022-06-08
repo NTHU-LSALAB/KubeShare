@@ -34,10 +34,12 @@ func (kss *KubeShareScheduler) addNode(obj interface{}) {
 	kss.nodePodManagerPortBitmapMutex.Lock()
 	defer kss.nodePodManagerPortBitmapMutex.Unlock()
 
-	kss.nodePodManagerPortBitmap[name] = bitmap.NewRRBitmap(512)
-	kss.nodePodManagerPortBitmap[name].Mask(0)
+	if kss.nodePodManagerPortBitmap[name] == nil {
+		kss.nodePodManagerPortBitmap[name] = bitmap.NewRRBitmap(512)
+		kss.nodePodManagerPortBitmap[name].Mask(0)
 
-	kss.getGPUByNode(name)
+		kss.getGPUByNode(name)
+	}
 
 	kss.cellMutex.Lock()
 	defer kss.cellMutex.Unlock()
@@ -59,9 +61,9 @@ func (kss *KubeShareScheduler) updateNode(oldObj, newObj interface{}) {
 	defer kss.cellMutex.Unlock()
 
 	if isNodeHealth(newNode) {
-		kss.setNodehealthy(name, true)
+		kss.setNodeStatus(name, true)
 	} else {
-		kss.setNodehealthy(name, false)
+		kss.setNodeStatus(name, false)
 	}
 }
 
@@ -72,7 +74,7 @@ func (kss *KubeShareScheduler) deleteNode(obj interface{}) {
 
 	kss.cellMutex.Lock()
 	defer kss.cellMutex.Unlock()
-	kss.setNodehealthy(name, false)
+	kss.setNodeStatus(name, false)
 }
 
 func (kss *KubeShareScheduler) convertToNode(obj interface{}) *v1.Node {
@@ -110,7 +112,12 @@ func (kss *KubeShareScheduler) setNodeStatus(nodeName string, healthy bool) {
 	for _, freeList := range kss.cellFreeList {
 		for _, cellList := range freeList {
 			for _, cell := range cellList {
-				kss.setCellStatus(cell, healthy, nodeName)
+				// kss.setCellStatus(cell, healthy, nodeName)
+				if cell.state == CellFree {
+					kss.setCellStatus(cell, healthy, nodeName)
+				} else {
+					kss.setCellHealthy(cell, healthy, nodeName)
+				}
 			}
 		}
 	}
@@ -148,7 +155,7 @@ func (kss *KubeShareScheduler) setCellStatus(cell *Cell, healthy bool, nodeName 
 		node := current.node
 		if node == nodeName || node == "" {
 			current.healthy = healthy
-
+			current.state = CellFilled
 			// set the uuid & memory
 			if current.level == 1 && idx < n {
 				current.uuid = GPUs[idx].uuid
@@ -190,16 +197,20 @@ func (kss *KubeShareScheduler) setCellStatus(cell *Cell, healthy bool, nodeName 
 }
 
 // set the cell healthy according to the specified node status
-func (kss *KubeShareScheduler) setNodehealthy(nodeName string, healthy bool) {
-	kss.ksl.Debugf("setNodehealthy: %v, %v", nodeName, healthy)
-	for _, freeList := range kss.cellFreeList {
-		for _, cellList := range freeList {
-			for _, cell := range cellList {
-				kss.setCellHealthy(cell, healthy, nodeName)
-			}
-		}
-	}
-}
+// func (kss *KubeShareScheduler) setNodehealthy(nodeName string, healthy bool) {
+// 	kss.ksl.Debugf("setNodehealthy: %v, %v", nodeName, healthy)
+// 	for _, freeList := range kss.cellFreeList {
+// 		for _, cellList := range freeList {
+// 			for _, cell := range cellList {
+// 				if cell.state == CellFree {
+// 					kss.setCellStatus(cell, healthy, nodeName)
+// 				} else {
+// 					kss.setCellHealthy(cell, healthy, nodeName)
+// 				}
+// 			}
+// 		}
+// 	}
+// }
 
 // set the cell health
 func (kss *KubeShareScheduler) setCellHealthy(cell *Cell, healthy bool, nodeName string) {

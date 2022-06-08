@@ -48,7 +48,7 @@ func (kss *KubeShareScheduler) addPod(obj interface{}) {
 	pod := obj.(*v1.Pod)
 	kss.ksl.Infof("[ADD POD] %v/%v(%v)", pod.Namespace, pod.Name, pod.UID)
 
-	if isBound(pod) {
+	if isBound(pod) && !isCompleted(pod) {
 		kss.ksl.Infof("[Sync Resource] %v/%v(%v) is bound", pod.Namespace, pod.Name, pod.UID)
 
 		key := fmt.Sprintf("%v/%v", pod.Namespace, pod.Name)
@@ -78,11 +78,16 @@ func (kss *KubeShareScheduler) addPod(obj interface{}) {
 	}
 }
 
-// func (kss *KubeShareScheduler) updatePod(oldObj, newObj interface{}) {
-// 	oldPod := oldObj.(*v1.Pod)
-// 	newPod := newObj.(*v1.Pod)
-// 	kss.ksl.Infof("[UPDATE POD] old: %v/%v(%v) ; new: %v/%v(%v)", oldPod.Namespace, oldPod.Name, oldPod.UID, newPod.Namespace, newPod.Name, newPod.UID)
-// }
+func (kss *KubeShareScheduler) updatePod(oldObj, newObj interface{}) {
+	oldPod := oldObj.(*v1.Pod)
+	newPod := newObj.(*v1.Pod)
+	kss.ksl.Infof("[UPDATE POD] old: %v/%v(%v) ; new: %v/%v(%v)", oldPod.Namespace, oldPod.Name, oldPod.UID, newPod.Namespace, newPod.Name, newPod.UID)
+	if oldPod.UID != newPod.UID {
+		kss.deletePod(oldPod)
+		kss.addPod(newPod)
+		return
+	}
+}
 
 func (kss *KubeShareScheduler) deletePod(obj interface{}) {
 	pod := obj.(*v1.Pod)
@@ -112,20 +117,42 @@ func (kss *KubeShareScheduler) deletePod(obj interface{}) {
 				kss.reclaimResource(cell, request, memory)
 			}
 		}
+
 	} else {
 		kss.ksl.Infof("[DELETE POD] %v/%v(%v) is a shadow pod or regular pod, not need to reclaim resource", pod.Namespace, pod.Name, pod.UID)
 	}
 
+	if podStatus.podGroup != "" {
+		key := fmt.Sprintf("%v/%v", pod.Namespace, podStatus.podGroup)
+		totalPods := kss.caculateTotalPods(pod.Namespace, podStatus.podGroup)
+		if totalPods == 0 {
+			kss.podGroupMutex.Lock()
+			defer kss.podGroupMutex.Unlock()
+			kss.ksl.Warnf("[DELETE PODGROUP] %v, before len %v", key, len(kss.podGroupInfos))
+			delete(kss.podGroupInfos, key)
+			kss.ksl.Warnf("[DELETE PODGROUP] %v, after len %v and its value %v", key, len(kss.podGroupInfos), kss.podGroupInfos[key])
+		}
+	}
 }
 
-func filterPod(obj interface{}) bool {
+func (kss *KubeShareScheduler) filterPod(obj interface{}) bool {
 	switch t := obj.(type) {
 	case *v1.Pod:
 		pod := obj.(*v1.Pod)
-		return !isCompleted(pod) && managedByScheduler(pod)
+		managed := managedByScheduler(pod)
+		if managed && isCompleted(pod) {
+			kss.ksl.Infof("pod %v/%v(%v) is %v, reclaim resource", pod.Namespace, pod.Name, pod.UID, pod.Status.Phase)
+			kss.deletePod(pod)
+		}
+		return managed // !isCompleted(pod) && managedByScheduler(pod)
 	case cache.DeletedFinalStateUnknown:
 		if pod, ok := t.Obj.(*v1.Pod); ok {
-			return !isCompleted(pod) && managedByScheduler(pod)
+			managed := managedByScheduler(pod)
+			if managed && isCompleted(pod) {
+				kss.ksl.Infof("pod %v/%v(%v) is %v, reclaim resource", pod.Namespace, pod.Name, pod.UID, pod.Status.Phase)
+				kss.deletePod(pod)
+			}
+			return managed //  !isCompleted(pod) && managedByScheduler(pod)
 		}
 		return false
 	default:
@@ -315,7 +342,7 @@ func (kss *KubeShareScheduler) deletePodStatus(pod *v1.Pod) (*PodStatus, bool) {
 		delete(kss.podStatus, key)
 		return ps, true
 	}
-	return nil, false
+	return ps, false
 }
 
 // reserves the gpu resource and injects the environment variables
@@ -511,6 +538,9 @@ func (kss *KubeShareScheduler) processBoundPodQueue(nodeName string) {
 	kss.ksl.Debugf("[processBoundPodQueue] node: %v, length of Q: %v", nodeName, q.Len())
 	for q.Len() > 0 {
 		pod := q.Dequeue().(*v1.Pod)
+		if pod.Spec.NodeName == "" {
+			continue
+		}
 		kss.processBoundPod(pod)
 	}
 }

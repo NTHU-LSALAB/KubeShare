@@ -38,7 +38,7 @@ func (kss *KubeShareScheduler) getOrCreatePodGroupInfo(pod *v1.Pod, ts time.Time
 
 	var pgKey string
 	if len(PodGroupName) > 0 && podMinAvailable > 0 {
-		pgKey = fmt.Sprintf("%v/%v", pod.Namespace, pod.Name)
+		pgKey = fmt.Sprintf("%v/%v", pod.Namespace, podGroupName)
 	}
 
 	kss.podGroupMutex.Lock()
@@ -46,7 +46,7 @@ func (kss *KubeShareScheduler) getOrCreatePodGroupInfo(pod *v1.Pod, ts time.Time
 	// If it is a PodGroup and present in PodGroupInfos, return it.
 	if len(pgKey) != 0 {
 
-		pgInfo, exist := kss.podGroupInfos[podGroupName]
+		pgInfo, exist := kss.podGroupInfos[pgKey]
 		if exist {
 			// If the deleteTimestamp isn't nil,
 			// it means that the PodGroup is marked as expired before.
@@ -71,7 +71,7 @@ func (kss *KubeShareScheduler) getOrCreatePodGroupInfo(pod *v1.Pod, ts time.Time
 	}
 	// If it's not a regular Pod, store the PodGroup in PodGroupInfos
 	if len(pgKey) > 0 {
-		kss.podGroupInfos[podGroupName] = pgInfo
+		kss.podGroupInfos[pgKey] = pgInfo
 	}
 	return pgInfo
 }

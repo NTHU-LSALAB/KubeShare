@@ -15,11 +15,10 @@ type (
 )
 
 const (
-	CellFree     CellState = "FREE"
-	CellReserved CellState = "RESERVED"
-	CellPartial  CellState = "PARTIAL"
-	CellUsed     CellState = "USED"
-	lowestLevel  int       = 1
+	CellFree   CellState = "FREE"
+	CellFilled CellState = "FILLED"
+
+	lowestLevel int = 1
 )
 
 func appendCellList(cl1, cl2 CellList) CellList {

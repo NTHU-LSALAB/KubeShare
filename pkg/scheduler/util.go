@@ -1,6 +1,8 @@
 package scheduler
 
 import (
+	"fmt"
+
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 )
@@ -19,7 +21,7 @@ func (kss *KubeShareScheduler) printPodStatus(ps *PodStatus) {
 	kss.ksl.Debugf("\tMemory:        %v", ps.memory)
 	kss.ksl.Debugf("\tModel:         %v", ps.model)
 	kss.ksl.Debugf("\tPriority:      %v", ps.priority)
-	kss.ksl.Debugf("\tUUDI:          %v", ps.uuid)
+	kss.ksl.Debugf("\tUUID:          %v", ps.uuid)
 	kss.ksl.Debugf("\tCells:        %+v", ps.cells)
 	kss.ksl.Debugf("\tPort:          %v", ps.port)
 	kss.ksl.Debugf("\tNode Name:     %v", ps.nodeName)
@@ -48,7 +50,17 @@ func (kss *KubeShareScheduler) caculateTotalPods(namespace, podGroupName string)
 		kss.ksl.Error(err)
 		return 0
 	}
-	return len(pods)
+	podSet := map[string]bool{}
+
+	for _, pod := range pods {
+		if pod.Status.Phase == v1.PodFailed {
+			continue
+		}
+		key := fmt.Sprintf("%v/%v", pod.Namespace, pod.Name)
+		podSet[key] = true
+	}
+
+	return len(podSet)
 }
 
 func (kss *KubeShareScheduler) calculateBoundPods(podGroupName, namespace string) int {
