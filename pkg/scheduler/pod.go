@@ -122,10 +122,11 @@ func (kss *KubeShareScheduler) deletePod(obj interface{}) {
 		kss.ksl.Infof("[DELETE POD] %v/%v(%v) is a shadow pod or regular pod, not need to reclaim resource", pod.Namespace, pod.Name, pod.UID)
 	}
 
-	if podStatus.podGroup != "" {
+	if podStatus != nil && podStatus.podGroup != "" {
 		key := fmt.Sprintf("%v/%v", pod.Namespace, podStatus.podGroup)
-		totalPods := kss.caculateTotalPods(pod.Namespace, podStatus.podGroup)
-		if totalPods == 0 {
+		totalPods := kss.caculateTotalPods(pod.Namespace, podStatus.podGroup) - 1
+		kss.ksl.Warnf("[DELETE PODGROUP] %v -> total Pods %v", key, totalPods)
+		if totalPods <= 0 {
 			kss.podGroupMutex.Lock()
 			defer kss.podGroupMutex.Unlock()
 			kss.ksl.Warnf("[DELETE PODGROUP] %v, before len %v", key, len(kss.podGroupInfos))

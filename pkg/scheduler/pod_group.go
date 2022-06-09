@@ -84,6 +84,7 @@ func (kss *KubeShareScheduler) getPodGroupLabels(pod *v1.Pod) (string, int) {
 	if !ok || len(podGroupName) == 0 {
 		return "", 0
 	}
+
 	minAvailable, ok := pod.Labels[PodGroupMinAvailable]
 	if !ok || len(minAvailable) == 0 {
 		return "", 0

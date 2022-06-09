@@ -1,7 +1,7 @@
 apiVersion: elastic.pytorch.org/v1alpha1
 kind: ElasticJob
 metadata:
-  name: resnet18-1
+  name: resnet18-3
   namespace: elastic-job
 spec:
   # Use "etcd-service:2379" if you already apply etcd.yaml
@@ -20,7 +20,7 @@ spec:
             "sharedgpu/gpu_request": "1.0"
             "sharedgpu/gpu_limit": "1.0"
             "sharedgpu/priority": "100"
-            "sharedgpu/group_name": "restnet18-1"
+            "sharedgpu/group_name": "restnet18-3"
             "sharedgpu/min_available": "2"
         spec:
           schedulerName: kubeshare-scheduler
@@ -38,7 +38,7 @@ spec:
                 - "/workspace/examples/imagenet/main.py"
                 - "--arch=resnet18"
                 - "--epochs=5"
-                - "--batch-size=32"
+                - "--batch-size=8"
                 # number of data loader workers (NOT trainers)
                 # zero means load the data on the same process as the trainer
                 # this is set so that the container does not OOM since
