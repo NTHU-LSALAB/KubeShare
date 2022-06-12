@@ -300,7 +300,7 @@ func (kss *KubeShareScheduler) PreFilter(ctx context.Context, state *framework.C
 	if podMinAvailable != pgMinAvailable {
 		msg := fmt.Sprintf("Pod %v/%v(%v) has a different minAvailable (%v) as the PodGroup %v (%v)", pod.Namespace, pod.Name, pod.UID, podMinAvailable, pgGroupName, pgMinAvailable)
 		kss.ksl.Errorf(msg)
-		return framework.NewStatus(framework.Unschedulable, msg)
+		return framework.NewStatus(framework.Wait, msg)
 	}
 
 	// check if the priorities of pods in same pod group are the same

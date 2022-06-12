@@ -5,7 +5,7 @@ metadata:
   labels:
     app: py
 spec:
-  replicas: 10
+  replicas: 2
   selector:
     matchLabels:
       app: py
@@ -16,7 +16,7 @@ spec:
         "sharedgpu/gpu_request": "0.2"
         "sharedgpu/gpu_limit": "1.0"
         "sharedgpu/group_name": "dep"
-        "sharedgpu/min_available": "3"
+        "sharedgpu/min_available": "2"
         "sharedgpu/priority": "100"
     spec:
       schedulerName: kubeshare-scheduler
