@@ -14,9 +14,9 @@ spec:
   restartPolicy: Never
   containers:
     - name: pytorch
-      image:  riyazhu/mnist:20220510
+      image:  riyazhu/mnist:test
       imagePullPolicy: IfNotPresent
-      resources:
-        limits:
-          cpu: "1"
-          memory: "4Gi"
+      #resources:
+      #  limits:
+      #    cpu: "1"
+      #    memory: "4Gi"

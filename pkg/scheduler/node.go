@@ -37,9 +37,9 @@ func (kss *KubeShareScheduler) addNode(obj interface{}) {
 	if kss.nodePodManagerPortBitmap[name] == nil {
 		kss.nodePodManagerPortBitmap[name] = bitmap.NewRRBitmap(512)
 		kss.nodePodManagerPortBitmap[name].Mask(0)
-
-		kss.getGPUByNode(name)
 	}
+
+	kss.getGPUByNode(name)
 
 	kss.cellMutex.Lock()
 	defer kss.cellMutex.Unlock()

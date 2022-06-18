@@ -3,9 +3,9 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: cifar10
+  name: cifar10-2
   labels:
-    "sharedgpu/gpu_request": "1"
+    "sharedgpu/gpu_request": "0.3"
     "sharedgpu/gpu_limit": "1.0"
     "sharedgpu/priority": "100"
     #    "sharedgpu/gpu_model": "NVIDIA-GeForce-GTX-1080"

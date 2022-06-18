@@ -1,0 +1,169 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kubeshare-scheduler
+  namespace: kube-system
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: kubeshare-scheduler
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - "*"
+    verbs: 
+      - "*"
+  - apiGroups:
+      - apps
+      - extensions
+    resources:
+      - "*"
+    verbs:
+      - "*"
+  - apiGroups:
+      - policy
+    resources:
+      - poddisruptionbudgets
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - "storage.k8s.io"
+    resources:
+      - "*"
+    verbs:
+      - "*"
+  - apiGroups:
+      - "coordination.k8s.io"
+    resources:
+      - leases
+    verbs:
+      - create
+      - get
+      - list
+      - update
+  - apiGroups:
+      - "events.k8s.io"
+    resources:
+      - "*"
+    verbs:
+      - "*"
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: kubeshare-scheduler
+subjects:
+- kind: ServiceAccount
+  name: kubeshare-scheduler
+  namespace: kube-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kubeshare-scheduler
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: scheduler-config
+  namespace: kube-system
+data:
+  scheduler-config.yaml: |
+    apiVersion: kubescheduler.config.k8s.io/v1alpha2
+    kind: KubeSchedulerConfiguration
+    leaderElection:
+      leaderElect: false
+    profiles:
+    - schedulerName: kubeshare-scheduler
+      plugins:
+        queueSort:
+          enabled:
+            - name: kubeshare-scheduler
+          disabled:
+            - name: "*"
+        preFilter:
+          enabled:
+            - name: kubeshare-scheduler
+        filter:
+          enabled:
+            - name: kubeshare-scheduler
+              # score:
+                # enabled:
+                #- name: kubeshare-scheduler
+             # disabled:
+        #   - name: "*"
+        reserve:
+            enabled:
+            - name: kubeshare-scheduler
+        unreserve:
+          enabled:
+            - name: kubeshare-scheduler
+        permit:
+          enabled:
+            - name: kubeshare-scheduler 
+    # optional plugin configs
+      pluginConfig: 
+      - name: kubeshare-scheduler
+        args:
+          level: 3
+          prometheusURL: "http://prometheus-k8s.monitoring:9090"
+---
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: kubeshare-scheduler
+  namespace: kube-system
+  annotations:
+    scheduler.alpha.kubernetes.io/critical-pod: ""
+  labels:
+    app: kubeshare-scheduler
+spec:
+  serviceAccountName: kubeshare-scheduler
+  priorityClassName: system-node-critical
+  tolerations:
+  - key: "CriticalAddonsOnly"
+    operator: "Exists"
+  - key: "node-role.kubernetes.io/master"
+    operator: "Exists"
+    effect: "NoSchedule"
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: "node-role.kubernetes.io/master"
+            operator: "Exists"
+  volumes:
+    - name: scheduler-config
+      configMap:
+        name: scheduler-config
+    - name: "kubeshare-scheduler"
+      hostPath:
+        path: "/kubeshare/scheduler"
+    - name: "kubeshare-log"
+      hostPath:
+        path: "/kubeshare/log"
+  restartPolicy: Never
+  containers:
+  - name: kubeshare-scheduler
+    image: riyazhu/kubeshare-scheduler:db #20211108 #20210706124950 
+    imagePullPolicy: Always
+    command: ["kubeshare-scheduler"]
+    args:
+      - --config=/scheduler/scheduler-config.yaml
+    resources:
+      requests:
+        cpu: "50m"
+    volumeMounts:
+      - name: scheduler-config
+        mountPath: /scheduler
+      - name: "kubeshare-scheduler"
+        mountPath: "/kubeshare/scheduler"
+      - name: "kubeshare-log"
+        mountPath: "/kubeshare/log"
+---
+
