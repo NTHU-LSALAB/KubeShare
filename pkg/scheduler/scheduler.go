@@ -507,10 +507,10 @@ func (kss *KubeShareScheduler) Reserve(ctx context.Context, state *framework.Cyc
 	multiGPU := ps.request > 1.0
 	if ps.priority <= 0 {
 		ps.cells = kss.calculateOpportunisticPodCellScore(nodeName, ps)
-		kss.ksl.Debugf("[Reserve] pod cell for Opportunistic: %+v", ps.cells)
+		kss.ksl.Debugf("[Reserve] pod cell for Opportunistic: %+v", ps.cells[0].child)
 	} else {
 		ps.cells = kss.calculateGuaranteePodCellScore(nodeName, ps)
-		kss.ksl.Debugf("[Reserve] pod cell for Guarantee: %+v", ps.cells)
+		kss.ksl.Debugf("[Reserve] pod cell for Guarantee: %+v", ps.cells[0].child)
 	}
 	if len(ps.cells) <= 0 {
 		framework.NewStatus(framework.Unschedulable, "Pod can not reserve resource")

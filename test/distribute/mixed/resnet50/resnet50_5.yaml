@@ -6,7 +6,7 @@ metadata:
 spec:
   # Use "etcd-service:2379" if you already apply etcd.yaml
   rdzvEndpoint: etcd-service:2379 #"<your_etcd_endpoint>:<your_etcd_port>"
-  minReplicas: 1
+  minReplicas: 2
   maxReplicas: 2
   replicaSpecs:
     Worker:
@@ -38,7 +38,7 @@ spec:
                 - "--nproc_per_node=1"
                 - "/workspace/examples/imagenet/main.py"
                 - "--arch=resnet50"
-                - "--epochs=5"
+                - "--epochs=2"
                 - "--batch-size=16"
                 # number of data loader workers (NOT trainers)
                 # zero means load the data on the same process as the trainer

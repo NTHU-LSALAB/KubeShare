@@ -37,7 +37,7 @@ spec:
                 - "--nproc_per_node=1"
                 - "/workspace/examples/imagenet/main.py"
                 - "--arch=resnet18"
-                - "--epochs=5"
+                - "--epochs=2"
                 - "--batch-size=16"
                 # number of data loader workers (NOT trainers)
                 # zero means load the data on the same process as the trainer

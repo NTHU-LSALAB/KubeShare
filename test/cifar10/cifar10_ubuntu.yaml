@@ -3,20 +3,20 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: cifar10-2
+  name: cifar10-ubuntu
   labels:
-    "sharedgpu/gpu_request": "0.3"
+    "sharedgpu/gpu_request": "1.0"
     "sharedgpu/gpu_limit": "1.0"
     "sharedgpu/priority": "100"
-    #    "sharedgpu/gpu_model": "NVIDIA-GeForce-GTX-1080"
+    "sharedgpu/gpu_model": "Tesla-V100-PCIE-32GB"
 spec:
   schedulerName: kubeshare-scheduler
   restartPolicy: Never
   containers:
     - name: pytorch
       image:  riyazhu/cifar10:test
-      # command: ["sh", "-c", "sleep infinity"]
-      imagePullPolicy: IfNotPresent
+      command: ["sh", "-c", "sleep infinity"]
+      imagePullPolicy: Always #IfNotPresent
       volumeMounts:
       - name: datasets
         mountPath: "/datasets/"

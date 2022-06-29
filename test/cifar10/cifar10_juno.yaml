@@ -3,7 +3,7 @@ kind: Pod
 metadata:
   name: cifar-1080
   labels:
-    "sharedgpu/gpu_request": "0.3"
+    "sharedgpu/gpu_request": "1.0"
     "sharedgpu/gpu_limit": "1.0"
     "sharedgpu/priority": "100"
     "sharedgpu/gpu_model": "NVIDIA-GeForce-GTX-1080"
@@ -14,7 +14,7 @@ spec:
     - name: pytorch
       image:  riyazhu/cifar10:test
       #      command: ["sh", "-c", "sleep infinity"]
-      imagePullPolicy: IfNotPresent
+      imagePullPolicy: Always #IfNotPresent
       volumeMounts:
       - name: datasets
         mountPath: "/datasets/"

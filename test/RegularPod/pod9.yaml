@@ -5,7 +5,7 @@ kind: Pod
 metadata:
   name: pod9
 spec:
-  schedulerName: kubeshare-scheduler
+        #  schedulerName: kubeshare-scheduler
   containers:
     - name: pytorch
       image:  riyazhu/mnist:20220420
@@ -14,3 +14,6 @@ spec:
         limits:
           cpu: "1"
           memory: "4Gi"
+          nvidia.com/gpu: 6
+        requests:
+          nvidia.com/gpu: 6

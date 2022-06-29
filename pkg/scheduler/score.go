@@ -321,12 +321,14 @@ func (kss *KubeShareScheduler) calculateOpportunisticPodCellScore(nodeName strin
 		for _, cell := range cellList {
 			if cell.available == 1 {
 				scores = append(scores, &CellScore{cell: cell, score: float64(cell.priority)})
+				kss.ksl.Infof("[Reserve-Opportunistic] cell %v : %v", cell.id, float64(cell.priority))
 			}
 		}
 	} else {
 		for _, cell := range cellList {
 			score := float64(cell.priority) + ((1 - cell.available) * 100)
 			scores = append(scores, &CellScore{cell: cell, score: score})
+			kss.ksl.Infof("[Reserve-Opportunistic] cell %v : %v", cell.id, score)
 		}
 	}
 
@@ -394,6 +396,7 @@ func (kss *KubeShareScheduler) calculateGuaranteePodCellScore(nodeName string, p
 					score -= locality / nGroup * 100
 				}
 				scores = append(scores, &CellScore{cell: cell, score: score})
+				kss.ksl.Infof("[Reserve-Guarantee] cell %v : %v", cell.id, score)
 			}
 		}
 	} else {
@@ -410,6 +413,7 @@ func (kss *KubeShareScheduler) calculateGuaranteePodCellScore(nodeName string, p
 				score -= ((locality / nGroup) * 100)
 			}
 			scores = append(scores, &CellScore{cell: cell, score: score})
+			kss.ksl.Infof("[Reserve-Guarantee] cell %v : %v", cell.id, score)
 		}
 	}
 
