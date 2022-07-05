@@ -3,7 +3,7 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: pod9
+  name: zzz
 spec:
         #  schedulerName: kubeshare-scheduler
   containers:
