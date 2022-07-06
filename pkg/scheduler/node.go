@@ -61,6 +61,7 @@ func (kss *KubeShareScheduler) updateNode(oldObj, newObj interface{}) {
 	defer kss.cellMutex.Unlock()
 
 	if isNodeHealth(newNode) {
+		kss.getGPUByNode(name)
 		kss.setNodeStatus(name, true)
 	} else {
 		kss.setNodeStatus(name, false)
