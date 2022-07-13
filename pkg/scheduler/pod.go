@@ -226,7 +226,7 @@ func (kss *KubeShareScheduler) getPodLabels(pod *v1.Pod) (string, bool, *PodStat
 	}
 
 	// get the pod group and min available infomation  and store in pod status
-	ps.podGroup, ps.minAvailable = kss.getPodGroupLabels(pod)
+	ps.podGroup, _, _, ps.minAvailable = kss.getPodGroupLabels(pod)
 
 	// get the priority and store in pod status
 	// if ok equal to false,

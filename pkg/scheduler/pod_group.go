@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"time"
+	"math"
 
 	v1 "k8s.io/api/core/v1"
 	//podutil "k8s.io/kubernetes/pkg/api/v1/pod"
@@ -24,6 +25,11 @@ type PodGroupInfo struct {
 	// the minimum number of pods to be co-scheduled in a PodGroup
 	// all pods in the same PodGroup should have same minAvailable
 	minAvailable int
+
+	headCount int
+
+	threshold float64
+
 	// stores the timestamp when the PodGroup marked as expired.
 	deletionTimestamp *time.Time
 }
@@ -34,7 +40,7 @@ type PodGroupInfo struct {
 // => it stores the created PodGroup in PodGroupInfo
 // => it also returns the pod's PodGroupMinAvailable (0 if not specified).
 func (kss *KubeShareScheduler) getOrCreatePodGroupInfo(pod *v1.Pod, ts time.Time) *PodGroupInfo {
-	podGroupName, podMinAvailable := kss.getPodGroupLabels(pod)
+	podGroupName, PodGroupHeadcount, PodGroupThreshold, podMinAvailable := kss.getPodGroupLabels(pod)
 
 	var pgKey string
 	if len(PodGroupName) > 0 && podMinAvailable > 0 {
@@ -68,6 +74,8 @@ func (kss *KubeShareScheduler) getOrCreatePodGroupInfo(pod *v1.Pod, ts time.Time
 		priority:     priority, // podutil.GetPodPriority(pod) + kss.getPodPrioriy(pod)
 		timestamp:    ts,
 		minAvailable: podMinAvailable,
+		headCount: PodGroupHeadcount, 
+		threshold: PodGroupThreshold,
 	}
 	// If it's not a regular Pod, store the PodGroup in PodGroupInfos
 	if len(pgKey) > 0 {
@@ -77,26 +85,40 @@ func (kss *KubeShareScheduler) getOrCreatePodGroupInfo(pod *v1.Pod, ts time.Time
 }
 
 // checks if the pod belongs to a PodGroup.
-// If so,  it will return the podGroupName, minAvailable and priority of the PodGroup.
+// If so,  it will return the podGroupName, headcount, threshold,  minAvailable.
 // If not, it will return "" and 0.
-func (kss *KubeShareScheduler) getPodGroupLabels(pod *v1.Pod) (string, int) {
+func (kss *KubeShareScheduler) getPodGroupLabels(pod *v1.Pod) (string, int,  float64, int) {
 	podGroupName, ok := pod.Labels[PodGroupName]
 	if !ok || len(podGroupName) == 0 {
-		return "", 0
+		return "", 0, 0.0, 0
 	}
 
-	minAvailable, ok := pod.Labels[PodGroupMinAvailable]
-	if !ok || len(minAvailable) == 0 {
-		return "", 0
+	headcount, ok := pod.Labels[PodGroupHeadcount]
+	if !ok || len(headcount) == 0 {
+		return "", 0, 0.0, 0
 	}
 
-	miniNum, err := strconv.Atoi(minAvailable)
-	if err != nil || miniNum < 1 {
-		kss.ksl.Error(fmt.Sprintf("PodGroup %v/%v : PodGroupMinAvailable %v is invalid", pod.Namespace, pod.Name, minAvailable))
-		return "", 0
+	headcnt, err := strconv.Atoi(headcount)
+	if err != nil || headcnt < 1 {
+		kss.ksl.Error(fmt.Sprintf("PodGroup %v/%v : PodGroupHeadCount %v is invalid", pod.Namespace, pod.Name, headcount))
+		return "", 0, 0.0, 0
 	}
 
-	return podGroupName, miniNum
+	threshold, ok := pod.Labels[PodGroupThreshold]
+	if !ok || len(threshold) == 0 {
+		return "", 0, 0.0, 0
+	}
+
+	thres, err := strconv.ParseFloat(threshold, 64)
+	if err != nil || thres <= 0 {
+		kss.ksl.Error(fmt.Sprintf("PodGroup %v/%v : PodGroupThreshold %v is invalid", pod.Namespace, pod.Name, threshold))
+		return "", 0, 0.0, 0
+	}
+
+
+	minAvailable := int(math.Floor(thres*float64(headcnt)+0.5))
+
+	return podGroupName, headcnt, thres, minAvailable
 }
 
 func (kss *KubeShareScheduler) podGroupInfoGC() {

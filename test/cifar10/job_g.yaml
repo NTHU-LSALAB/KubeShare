@@ -5,8 +5,8 @@ metadata:
   labels:
     app: cifar10
 spec:
-  completions: 15
-  parallelism: 15
+  completions: 2
+  parallelism: 2
  # selector:
   #  matchLabels:
    #   app: cifar10
@@ -15,10 +15,11 @@ spec:
       name: cifar10
       labels:
         #app: cifar10
-        "sharedgpu/gpu_request": "1.0"
+        "sharedgpu/gpu_request": "0.5"
         "sharedgpu/gpu_limit": "1.0"
-        # "sharedgpu/group_name": "dep"
-        # "sharedgpu/min_available": "2"
+        "sharedgpu/group_name": "test"
+        "sharedgpu/group_headcount": "10"
+        "sharedgpu/group_threshold": "0.2"
         "sharedgpu/priority": "100"
     spec:
       schedulerName: kubeshare-scheduler

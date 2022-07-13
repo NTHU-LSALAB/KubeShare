@@ -4,8 +4,12 @@ const (
 	domain = "sharedgpu/"
 	// the name of a pod group that defines a coscheduling pod group.
 	PodGroupName = domain + "group_name"
-	// the minimum number of pods to be scheduled together in a pod group.
-	PodGroupMinAvailable = domain + "min_available"
+
+	// the total number of pods in a pod group
+	PodGroupHeadcount = domain + "group_headcount"
+	// the minimum proportion of pods to be scheduled together in a pod group.
+	PodGroupThreshold = domain + "group_threshold"
+	
 	// the priority of pod
 	// Note: pod in the same PodGroup should have same priority.
 	PodPriority = domain + "priority"

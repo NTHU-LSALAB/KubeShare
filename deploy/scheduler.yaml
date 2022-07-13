@@ -150,7 +150,7 @@ spec:
   restartPolicy: Never
   containers:
   - name: kubeshare-scheduler
-    image: riyazhu/kubeshare-scheduler:db #20211108 #20210706124950 
+    image: riyazhu/kubeshare-scheduler:db2 #20211108 #20210706124950 
     imagePullPolicy: Always
     command: ["kubeshare-scheduler"]
     args:
