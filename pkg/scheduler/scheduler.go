@@ -42,7 +42,7 @@ const (
 	// the file storing physical gpu position
 	configPath = "/kubeshare/scheduler/kubeshare-config.yaml"
 
-	PermitWaitingTimeSeconds      = 10
+	PermitWaitingTimeBaseSeconds  = 2
 	PodGroupGCIntervalSeconds     = 30
 	PodGroupExpirationTimeSeconds = 600
 )
@@ -70,8 +70,8 @@ type Args struct {
 	// logger
 	level int64 `json:"level,omitempty"`
 
-	// PermitWaitingTime is the wait timeout in seconds.
-	PermitWaitingTimeSeconds int64 `json:"permitWaitingTimeSeconds"`
+	// PermitWaitingTimeBaseSeconds is the base wait timeout in seconds.
+	PermitWaitingTimeBaseSeconds int64 `json:"permitWaitingBaseTimeSeconds"`
 	// PodGroupGCInterval is the period to run gc of PodGroup in seconds.
 	PodGroupGCIntervalSeconds int64 `json:"podGroupGCIntervalSeconds"`
 	// If the deleted PodGroup stays longer than the PodGroupExpirationTime,
@@ -119,7 +119,7 @@ func New(config *runtime.Unknown, handle framework.FrameworkHandle) (framework.P
 		level:                         3, // the default level is debugging mode
 		prometheusURL:                 "http://prometheus-k8s.monitoring:9090",
 		kubeShareConfig:               configPath,
-		PermitWaitingTimeSeconds:      PermitWaitingTimeSeconds,
+		PermitWaitingTimeBaseSeconds:  PermitWaitingTimeBaseSeconds,
 		PodGroupGCIntervalSeconds:     PodGroupGCIntervalSeconds,
 		PodGroupExpirationTimeSeconds: PodGroupExpirationTimeSeconds,
 	}
@@ -582,7 +582,7 @@ func (kss *KubeShareScheduler) Permit(ctx context.Context, state *framework.Cycl
 			namespace, groupName, pod.Name, minAvailable, current)
 
 		// TODO Change the timeout to a dynamic value depending on the size of the  `PodGroup`
-		return framework.NewStatus(framework.Wait, ""), time.Duration(kss.args.PermitWaitingTimeSeconds) * time.Second
+		return framework.NewStatus(framework.Wait, ""), time.Duration(kss.args.PermitWaitingTimeBaseSeconds* int64(pgInfo.headCount)) * time.Second
 	}
 
 	kss.ksl.Infof("The count of PodGroup %v/%v/%v is up to minAvailable(%d) in Permit: current(%d)",

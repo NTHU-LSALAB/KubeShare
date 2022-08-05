@@ -17,10 +17,10 @@ spec:
       image:  riyazhu/mnist:test
       command: ["sh", "-c", "sleep infinity"]
       imagePullPolicy: Always #IfNotPresent
-      volumeMounts:
-      - name: datasets
-        mountPath: "/datasets/"
-  volumes:
-    - name: datasets
-      hostPath:
-        path: "/home/riya/experiment/datasets/"
+      #      volumeMounts:
+      #- name: datasets
+      #  mountPath: "/datasets/"
+      #  volumes:
+      # - name: datasets
+      #hostPath:
+      #  path: "/home/riya/experiment/datasets/"

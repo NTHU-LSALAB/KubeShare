@@ -5,8 +5,8 @@ metadata:
   labels:
     app: cifar10
 spec:
-  completions: 2
-  parallelism: 2
+  completions: 10
+  parallelism: 10
  # selector:
   #  matchLabels:
    #   app: cifar10

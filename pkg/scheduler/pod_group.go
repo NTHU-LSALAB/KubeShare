@@ -22,12 +22,11 @@ type PodGroupInfo struct {
 	priority int32
 	// stores the initialization timestamp of a PodGroup.
 	timestamp time.Time
-	// the minimum number of pods to be co-scheduled in a PodGroup
-	// all pods in the same PodGroup should have same minAvailable
+	// the minimum number of pod = headCount*threshold
 	minAvailable int
-
+        // the total number of pods in a PodGroup
 	headCount int
-
+        // the minimum proportion of pods to be scheduled together in a PodGroup
 	threshold float64
 
 	// stores the timestamp when the PodGroup marked as expired.

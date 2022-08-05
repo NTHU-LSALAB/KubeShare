@@ -1,202 +1,102 @@
-# KubeShare
-Share GPU between Pods in Kubernetes
+# KubeShare 2.0
+A topology and heterogeneous resource aware scheduler for fractional GPU allocation in Kubernetes cluster  
+KubeShare 2.0 is designed in the way of the scheduling framework.
 
 # Features
-* Treat GPU as a first class resource.
-* Compatible with native "nvidia.com/gpu" system.
-* Extensible architecture supports custom scheduling policies without modifing KubeShare.
+* Support fractional gpu allocation(<=1) and integer gpu allocation(>1)
+* Support GPU Heterogeneity & Topology awareness
+* Support Coscheduling
+
 
 ## Prerequisite & Limitation
-* A Kubernetes cluster with [garbage collection](https://kubernetes.io/docs/concepts/workloads/controllers/garbage-collection/), [DNS enabled](https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/), and [Nvidia GPU device plugin](https://kubernetes.io/docs/tasks/manage-gpus/scheduling-gpus/#deploying-nvidia-gpu-device-plugin) installed.
+* A Kubernetes cluster with [garbage collection](https://kubernetes.io/docs/concepts/workloads/controllers/garbage-collection/), [DNS enabled](https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/) [nvidia-continaer-runtime](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html)installed.
 * Only support a kubernetes cluster that uses the environment variable `NVIDIA_VISIBLE_DEVICES` to control which GPUs will be made accessible inside the container.
-* One GPU model within one node.
-* cuda == 10.0 (other version not tested)
+* You also ensures that the *prometheus* is installed, because we will pull the data from it.
+* It can't compatible with other scheduler to manage gpu resource
+* Only tested with Kuberenetes v1.18.10
+
 
 <!--
-* GPU attachment setting of container should be going through NVIDIA_VISIBLE_DEVICES environment variable (docker and nvidia-docker2 version < 19).
+* GPU attachment setting of container should be going through NVIDIA_VISIBLE_DEVICES environment variable.
 -->
 
-<!--
-## CUDA Version Compatibility
-|CUDA Version|Status|
-|-|-|
-|9.0|Unknown|
-|9.1|Unknown|
-|9.2|Unknown|
-|10.0|Yes|
-|10.1|Unknown|
-|10.2|Unknown|
--->
+## Deployment
+1. [Deploy Componments](doc/deploy.md)
 
-## Run
+## Workloads
 
-### Installation
-```
-kubectl apply -f  build/deployment/
-```
+### Label description
 
-### Uninstallation
-```
-kubectl delete -f build/deployment/
-```
+Because floating point custom device requests is forbidden by K8s, we move GPU resource usage definitions to Labels.
+* `sharedgpu/gpu_request` (required if allocating GPU): guaranteed GPU usage of Pod, gpu_request <= "1.0".
+* `sharedgpu/gpu_limit` (required if allocating GPU): maximum extra usage if GPU still has free resources, gpu_request <= gpu_limit <= "1.0".
+* `sharedgpu/gpu_mem` (optional): maximum GPU memory usage of Pod, in bytes. The default value depends on `gpu_request`
+* `sharedgpu/priority`(optional): pod priority 0~100. The default value is 0.
+    * priority is equal to 0 represented as an **Opportunistic Pod** used to defragmentation
+    * priority is greater than 0 represented as **Guarantee Pod**, which optimizes performance considering locality.
+* `sharedgpu/pod_group_name` (optional): the name of pod group for a coscheduling
+* `sharedgpu/group_headcount` (optional): the total number of pods in same group
+* `sharedgpu/group_threshold` (optional): the minimum proportion of pods to be scheduled together in a pod group.
 
-## SharePod
+### Pod specification
 
-### SharePod Lifecycle
-
-![SharePod Lifecycle](doc/sharepodlife.png)
-
-1. User create a SharePod to requiring portion GPU.
-2. kubeshare-scheduler schedules pending SharePods.
-3. kubeshare-device-manager will create a corresponding Pod object behind the SharePod with same namespace and name, and some extra critical settings. (Pod started to run)
-4. kubeshare-device-manager will synchronize Pod's ObjectMeta and PodStatus to SharePodStatus.
-4. SharePod was deleted by user. (Pod was also garbage collected by K8s)
-
-### SharePod Specification
-```
-apiVersion: sharedgpu.goc/v1
-kind: SharePod
+```yaml
+apiVersion: v1
+kind: Pod
 metadata:
-  name: sharepod1
-  annotations:
-    "sharedgpu/gpu_request": "0.5" # required if allocating GPU
-    "sharedgpu/gpu_limit": "1.0" # required if allocating GPU
-    "sharedgpu/gpu_mem": "1073741824" # required if allocating GPU # 1Gi, in bytes
-    "sharedgpu/sched_affinity": "red" # optional
-    "sharedgpu/sched_anti-affinity": "green" # optional
-    "sharedgpu/sched_exclusion": "blue" # optional
-spec: # PodSpec
-  containers:
-  - name: cuda
-    image: nvidia/cuda:9.0-base
-    command: ["nvidia-smi", "-L"]
-    resources:
-      limits:
-        cpu: "1"
-        memory: "500Mi"
-```
-Because floating point custom device requests is forbidden by K8s, we move GPU resource usage definitions to Annotations.
-* sharedgpu/gpu_request (required if allocating GPU): guaranteed GPU usage of Pod, gpu_request <= "1.0".
-* sharedgpu/gpu_limit (required if allocating GPU): maximum extra usage if GPU still has free resources, gpu_request <= gpu_limit <= "1.0".
-* sharedgpu/gpu_mem (required if allocating GPU): maximum GPU memory usage of Pod, in bytes.
-* spec (required): a normal PodSpec definition to be running in K8s.
-* sharedgpu/sched_affinity (optional): only schedules SharePod with same sched_affinity label or schedules to an idle GPU.
-* sharedgpu/sched_anti-affinity (optional): do not schedules SharedPods together which have the same sched_anti-affinity label.
-* sharedgpu/sched_exclusion (optional): only one sched_exclusion label exists on a device, including empty label.
-* sharedgpu/gpu_model (optional): only assign pod to the node with dedicated gpu model, you can use `kubectl describe node | grep sharedgpu/gpu_model_info` to check gpu model e.g. GeForce GTX 1080
-
-We also support the **Node Selector**:  
-If you want to use this feature, please add the label to the node first and add the label in the yaml.  
-
-```yaml=
-  nodeSelector:
-    disktype: ssh
-```
-
-This is the example:  
-[Example](doc/yaml/nodeSelector/t1.yaml)
-
-### SharePod usage demo clip
-
-All yaml files in clip are located in REPO_ROOT/doc/yaml.
-
-[![asciicast](https://asciinema.org/a/302443.png)](https://asciinema.org/a/302443)
-
-### SharePod with NodeName and GPUID (advanced)
-Follow this section to understand how to locate a SharePod on a GPU which is used by others.  
-kubeshare-scheduler fills metadata.annotations["kubeshare/GPUID"] and spec.nodeName to schedule a SharePod.
-```
-apiVersion: sharedgpu.goc/v1
-kind: SharePod
-metadata:
-  name: sharepod1
-  annotations:
+  name: mnist
+  labels:
     "sharedgpu/gpu_request": "0.5"
     "sharedgpu/gpu_limit": "1.0"
-    "sharedgpu/gpu_mem": "1073741824" # 1Gi, in bytes
-    "sharedgpu/GPUID": "abcde"
-spec: # PodSpec
-  nodeName: node01
+    "sharedgpu/gpu_model": "NVIDIA-GeForce-GTX-1080"
+spec:
+  schedulerName: kubeshare-scheduler
+  restartPolicy: Never
   containers:
-  - name: cuda
-    image: nvidia/cuda:9.0-base
-    command: ["nvidia-smi", "-L"]
-    resources:
-      limits:
-        cpu: "1"
-        memory: "500Mi"
-```
-A GPU is shared between multiple SharePods if the SharePods own the same <nodeName, GPUID> pair.
-
-Following is a demonstration about how kubeshare-scheduler schedule SharePods with GPUID mechanism in a single node with two physical GPUs:
-```
-Initial status
-
-GPU1(null)       GPU2(null)
-+--------------+ +--------------+
-|              | |              |
-|              | |              |
-|              | |              |
-+--------------+ +--------------+
-
-Pending list: Pod1(0.2)
-kubeshare-scheduler decides to bind Pod1 on an idle GPU:
-    randomString(5) => "zxcvb"
-    Register Pod1 with GPUID: "zxcvb"
-
-GPU1(null)       GPU2(zxcvb)
-+--------------+ +--------------+
-|              | |   Pod1:0.2   |
-|              | |              |
-|              | |              |
-+--------------+ +--------------+
-
-Pending list: Pod2(0.3)
-kubeshare-scheduler decides to bind Pod2 on an idle GPU:
-    randomString(5) => "qwert"
-    Register Pod2 with GPUID: "qwert"
-
-GPU1(qwert)      GPU2(zxcvb)
-+--------------+ +--------------+
-|   Pod2:0.3   | |   Pod1:0.2   |
-|              | |              |
-|              | |              |
-+--------------+ +--------------+
-
-Pending list: Pod3(0.4)
-kubeshare-scheduler decides to share the GPU which Pod1 is using with Pod3:
-    Register Pod2 with GPUID: "zxcvb"
-
-GPU1(qwert)      GPU2(zxcvb)
-+--------------+ +--------------+
-|   Pod2:0.3   | |   Pod1:0.2   |
-|              | |   Pod3:0.4   |
-|              | |              |
-+--------------+ +--------------+
-
-Delete Pod2 (GPUID qwert is no longer exist)
-
-GPU1(null)       GPU2(zxcvb)
-+--------------+ +--------------+
-|              | |   Pod1:0.2   |
-|              | |   Pod3:0.4   |
-|              | |              |
-+--------------+ +--------------+
-
-Pending list: Pod4(0.5)
-kubeshare-scheduler decides to bind Pod4 on an idle GPU:
-    randomString(5) => "asdfg"
-    Register Pod4 with GPUID: "asdfg"
-
-GPU1(asdfg)      GPU2(zxcvb)
-+--------------+ +--------------+
-|   Pod4:0.5   | |   Pod1:0.2   |
-|              | |   Pod3:0.4   |
-|              | |              |
-+--------------+ +--------------+
+    - name: pytorch
+      image:  riyazhu/mnist:test
+      command: ["sh", "-c", "sleep infinity"]
+      imagePullPolicy: Always #IfNotPresent
 ```
 
-More details in [System Architecture](doc/architecture.md)
+### Job specification
+
+```yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: lstm-g
+  labels:
+    app: lstm-g
+spec:
+  completions: 5
+  parallelism: 5
+  template:
+    metadata:
+      name: lstm-o
+      labels:
+        "sharedgpu/gpu_request": "0.5"
+        "sharedgpu/gpu_limit": "1.0"
+        "sharedgpu/group_name": "a"
+        "sharedgpu/group_headcount": "5"
+        "sharedgpu/group_threshold": "0.2"
+        "sharedgpu/priority": "100"
+    spec:
+      schedulerName: kubeshare-scheduler
+      restartPolicy: Never
+      containers:
+        - name: pytorch
+          image:  riyazhu/lstm-wiki2:test
+          # command: ["sh", "-c", "sleep infinity"]
+          imagePullPolicy: IfNotPresent
+          volumeMounts:
+          - name: datasets
+            mountPath: "/datasets/"
+      volumes:
+        - name: datasets
+          hostPath:
+            path: "/home/riya/experiment/datasets/"
+```
 
 ## Build
 
@@ -206,28 +106,36 @@ git clone https://github.com/NTHU-LSALAB/KubeShare.git
 cd KubeShare
 make
 ```
-* bin/kubeshare-scheduler: schedules pending SharePods to node and device, i.e. <nodeName, GPUID>.
-* bin/kubeshare-device-manager: handles scheduled SharePods and create the Pod object. Communicate with kubeshare-config-client on every nodes.
-* bin/kubeshare-config-client: daemonset on every node which configure the GPU isolation settings.
+* bin/kubeshare-scheduler: schedules pending Pods to node and device, i.e. <nodeName, GPU UUID>.
+* bin/kubeshare-collector: collect the GPU specification
+* bin/kubeshare-aggregator(gpu register): register pod GPU requirement.
+* bin/kubeshare-config: update the config file for Gemini
+* bin/kubeshare-query-ip: inject current node ip for Gemini
+
+
+### Build & Push images 
+```
+make build-image
+make push-image
+```
+* chanage variables `CONTAINER_PREFIX`, `CONTAINER_NAME`, `CONTAINER_VERSION`
 
 ### Directories & Files
 * cmd/: where main function located of three binaries.
-* crd/: CRD specification yaml file.
-* docker/: materials of all docker images in yaml files
-* pkg/: includes KubeShare core components, SharePod, and API server clientset produced by code-generater.
-* code-gen.sh: [code-generator](https://github.com/kubernetes/code-generator) script.
+* docker/: materials of all docker images in yaml files.
+* pkg/: includes KubeShare 2.0 core components.
+* deploy/: the install yaml files.
 * go.mod: KubeShare dependencies.
 
 ## GPU Isolation Library
 Please refer to [Gemini](https://github.com/NTHU-LSALAB/Gemini).
 
 # TODO
-* Convert vGPU UUID update trigger method from dummy Pod creation handler to dummy Pod sending data to controller.  
-* Add PodSpec.SchedulerName support to kubeshare-scheduler.
-* Docker version check at init phase in config-client.
+* Optimize the locality function.  
+* Modify the prometheus to etcd.
+* Automatically detect GPU topology.
 
 # Issues
 Any issues please open a GitHub issue, thanks.
 
-# Publication
-Our paper is accepted by [ACM HPDC 2020](https://dl.acm.org/doi/10.1145/3369583.3392679), and an introduction video is also available on [YouTube](https://youtu.be/1WQMKCGN9j4).
+

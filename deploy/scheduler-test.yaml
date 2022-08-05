@@ -112,8 +112,8 @@ data:
           prometheusURL: "http://prometheus-k8s.monitoring:9090"
 ---
 
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: v1
+kind: Pod
 metadata:
   name: kubeshare-scheduler
   namespace: kube-system
@@ -122,55 +122,48 @@ metadata:
   labels:
     app: kubeshare-scheduler
 spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: kubeshare-scheduler
-  template:
-    metadata:
-      labels:
-        app: kubeshare-scheduler
-    spec:
-      serviceAccountName: kubeshare-scheduler
-      containers:
-        - name: kubeshare-scheduler
-          image: riyazhu/kubeshare-scheduler:db2 #20210706124950 
-          imagePullPolicy: Always
-          command: ["kubeshare-scheduler"]
-          args:
-            - --config=/scheduler/scheduler-config.yaml
-          resources:
-            requests:
-              cpu: "50m"
-          volumeMounts:
-            - name: scheduler-config
-              mountPath: /scheduler
-            - name: "kubeshare-scheduler"
-              mountPath: "/kubeshare/scheduler"
-            - name: "kubeshare-log"
-              mountPath: "/kubeshare/log"
-      volumes:
-        - name: scheduler-config
-          configMap:
-            name: scheduler-config
-        - name: "kubeshare-scheduler"
-          hostPath:
-            path: "/kubeshare/scheduler"
-        - name: "kubeshare-log"
-          hostPath:
-            path: "/kubeshare/log"
-      priorityClassName: system-node-critical
-      tolerations:
-      - key: "CriticalAddonsOnly"
-        operator: "Exists"
-      - key: "node-role.kubernetes.io/master"
-        operator: "Exists"
-        effect: "NoSchedule"
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-            - matchExpressions:
-              - key: "node-role.kubernetes.io/master"
-                operator: "Exists"
-  
+  serviceAccountName: kubeshare-scheduler
+  priorityClassName: system-node-critical
+  tolerations:
+  - key: "CriticalAddonsOnly"
+    operator: "Exists"
+  - key: "node-role.kubernetes.io/master"
+    operator: "Exists"
+    effect: "NoSchedule"
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: "node-role.kubernetes.io/master"
+            operator: "Exists"
+  volumes:
+    - name: scheduler-config
+      configMap:
+        name: scheduler-config
+    - name: "kubeshare-scheduler"
+      hostPath:
+        path: "/kubeshare/scheduler"
+    - name: "kubeshare-log"
+      hostPath:
+        path: "/kubeshare/log"
+  restartPolicy: Never
+  containers:
+  - name: kubeshare-scheduler
+    image: riyazhu/kubeshare-scheduler:db2 #20211108 #20210706124950 
+    imagePullPolicy: Always
+    command: ["kubeshare-scheduler"]
+    args:
+      - --config=/scheduler/scheduler-config.yaml
+    resources:
+      requests:
+        cpu: "50m"
+    volumeMounts:
+      - name: scheduler-config
+        mountPath: /scheduler
+      - name: "kubeshare-scheduler"
+        mountPath: "/kubeshare/scheduler"
+      - name: "kubeshare-log"
+        mountPath: "/kubeshare/log"
+---
+
