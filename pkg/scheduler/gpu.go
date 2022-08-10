@@ -50,5 +50,4 @@ func (kss *KubeShareScheduler) getGPUByNode(nodeName string) {
 		})
 	}
 	kss.gpuInfos[nodeName] = gpuInfos
-
 }

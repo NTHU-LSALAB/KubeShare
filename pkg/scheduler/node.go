@@ -49,7 +49,6 @@ func (kss *KubeShareScheduler) addNode(obj interface{}) {
 	} else {
 		kss.setNodeStatus(name, false)
 	}
-
 }
 
 func (kss *KubeShareScheduler) updateNode(oldObj, newObj interface{}) {

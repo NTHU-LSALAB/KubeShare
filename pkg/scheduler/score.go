@@ -79,7 +79,7 @@ func (kss *KubeShareScheduler) calculateGuaranteePodScore(nodeName string, podSt
 	return score
 }
 
-// socre = ( cell priority(computation power)
+// score = ( cell priority(computation power)
 //          -  gpu resource usage(defragmentation)
 //          -  average locality(placement sensitivity) ) / # of cell
 func (kss *KubeShareScheduler) calculateGuaranteePodNodeScore(cellList CellList, podGroup string) float64 {

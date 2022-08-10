@@ -3,7 +3,6 @@ package scheduler
 import (
 	"context"
 	"fmt"
-
 	"math"
 	"os"
 	"sync"
@@ -365,16 +364,12 @@ func (kss *KubeShareScheduler) Filter(ctx context.Context, state *framework.Cycl
 	memory := ps.memory
 
 	gpuModelInfos := kss.gpuInfos[nodeName]
-	model := ps.model
-	assignedGPU := false
-	if model != "" {
-		assignedGPU = true
-	}
 
 	kss.cellMutex.RLock()
 	defer kss.cellMutex.RUnlock()
+
 	// check if the node has the specified gpu or not
-	if assignedGPU {
+	if model := ps.model; model != "" {
 		kss.ksl.Infof("[Filter] Pod %v/%v(%v) specified gpu %v", pod.Namespace, pod.Name, pod.UID, model)
 		if _, ok := gpuModelInfos[model]; !ok {
 			msg := fmt.Sprintf("[Filter] Node %v without the specified gpu %v of pod %v/%v(%v)", nodeName, model, pod.Namespace, pod.Name, pod.UID)
@@ -383,8 +378,7 @@ func (kss *KubeShareScheduler) Filter(ctx context.Context, state *framework.Cycl
 		}
 
 		// check the specified gpu has sufficient gpu resource
-		fit, _, _ := kss.filterNode(nodeName, model, request, memory)
-		if fit {
+		if fit, _, _ := kss.filterNode(nodeName, model, request, memory); fit {
 			kss.ksl.Infof("[Filter] Node %v meet the gpu requirement of pod %v/%v(%v)", nodeName, pod.Namespace, pod.Name, pod.UID)
 			return framework.NewStatus(framework.Success, "")
 		} else {
@@ -392,7 +386,6 @@ func (kss *KubeShareScheduler) Filter(ctx context.Context, state *framework.Cycl
 			kss.ksl.Infof(msg)
 			return framework.NewStatus(framework.Unschedulable, msg)
 		}
-
 	}
 
 	// filter the node according to its gpu resource
@@ -400,7 +393,6 @@ func (kss *KubeShareScheduler) Filter(ctx context.Context, state *framework.Cycl
 	available := 0.0
 	freeMemory := int64(0)
 	for model := range gpuModelInfos {
-
 		fit, currentAvailable, currentMemory := kss.filterNode(nodeName, model, request, memory)
 		available += currentAvailable
 		freeMemory += currentMemory
@@ -444,7 +436,6 @@ func (kss *KubeShareScheduler) Score(ctx context.Context, state *framework.Cycle
 }
 
 func (kss *KubeShareScheduler) ScoreExtensions() framework.ScoreExtensions {
-
 	kss.ksl.Infof("[ScoreExtensions]")
 	return kss
 }
@@ -473,7 +464,6 @@ func (kss *KubeShareScheduler) NormalizeScore(ctx context.Context, state *framew
 		}
 		maxScore += reverse
 		minScore = 0
-
 	}
 
 	if maxScore <= 100 && maxScore >= 0 && minScore <= 100 && minScore >= 0 {
@@ -518,7 +508,6 @@ func (kss *KubeShareScheduler) Reserve(ctx context.Context, state *framework.Cyc
 	var podCopy *v1.Pod
 	if multiGPU {
 		podCopy = kss.newAssumedMultiGPUPod(pod, nodeName)
-
 	} else {
 		podCopy = kss.newAssumedSharedGPUPod(pod, nodeName)
 	}
@@ -557,7 +546,6 @@ func (kss *KubeShareScheduler) Unreserve(ctx context.Context, state *framework.C
 			waitingPod.Reject(kss.Name())
 		}
 	})
-
 }
 
 func (kss *KubeShareScheduler) Permit(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodeName string) (*framework.Status, time.Duration) {

@@ -44,14 +44,15 @@ func (kss *KubeShareScheduler) printPodStatus(ps *PodStatus) {
 // 	return len(pods)
 // }
 
+// calculateTotalPods calculate the number of pods in the given pod group
 func (kss *KubeShareScheduler) caculateTotalPods(namespace, podGroupName string) int {
 	pods, err := kss.podLister.Pods(namespace).List(labels.Set{PodGroupName: podGroupName}.AsSelector())
 	if err != nil {
 		kss.ksl.Error(err)
 		return 0
 	}
-	podSet := map[string]bool{}
 
+	podSet := map[string]bool{}
 	for _, pod := range pods {
 		if pod.Status.Phase == v1.PodFailed {
 			continue

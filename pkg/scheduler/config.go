@@ -1,14 +1,13 @@
 package scheduler
 
 import (
-	"KubeShare/pkg/lib/queue"
-	"io/ioutil"
 	"os"
 	"reflect"
 	"strconv"
 
-	"github.com/fsnotify/fsnotify"
+	"KubeShare/pkg/lib/queue"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/spf13/viper"
 	"gopkg.in/yaml.v2"
 )
@@ -36,24 +35,23 @@ type CellSpec struct {
 }
 
 func (kss *KubeShareScheduler) initRawConfig() *Config {
-	c := Config{}
+	var c Config
 
 	configPath := kss.args.kubeShareConfig
 	// convert raw data to yaml
-	yamlBytes, err := ioutil.ReadFile(configPath)
+	yamlBytes, err := os.ReadFile(configPath)
 	if err != nil {
-		kss.ksl.Errorf("Faild to read config file: %v, %v", configPath, err)
+		kss.ksl.Errorf("Failed to read config file: %v, %v", configPath, err)
 	}
 
-	err = yaml.Unmarshal(yamlBytes, &c)
-	if err != nil {
+	if err := yaml.Unmarshal(yamlBytes, &c); err != nil {
 		kss.ksl.Errorf("Failed to unmarshal YAML %#v to object: %v", string(yamlBytes), err)
 	}
 
 	if c.CellTypes == nil || c.Cells == nil {
 		kss.ksl.Warn("The cellTypes and cells in kubeshare config file is nil")
-
 	}
+
 	kss.checkPhysicalCells(&c)
 	return &c
 }
@@ -76,12 +74,7 @@ func (kss *KubeShareScheduler) checkPhysicalCells(c *Config) {
 }
 
 // infer the child's configuration from the parent's configuration
-func inferCellSpec(
-	spec *CellSpec,
-	cellTypes map[string]CellTypeSpec,
-	cellType string,
-	defaultID int) {
-
+func inferCellSpec(spec *CellSpec, cellTypes map[string]CellTypeSpec, cellType string, defaultID int) {
 	idQueue := queue.NewQueue()
 	q := queue.NewQueue()
 	q.Enqueue(spec)
@@ -140,5 +133,4 @@ func (kss *KubeShareScheduler) watchConfig(c *Config) {
 			os.Exit(0)
 		}
 	})
-
 }

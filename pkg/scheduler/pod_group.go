@@ -2,12 +2,11 @@ package scheduler
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"time"
-	"math"
 
 	v1 "k8s.io/api/core/v1"
-	//podutil "k8s.io/kubernetes/pkg/api/v1/pod"
 )
 
 type PodGroupInfo struct {
@@ -39,7 +38,7 @@ type PodGroupInfo struct {
 // => it stores the created PodGroup in PodGroupInfo
 // => it also returns the pod's PodGroupMinAvailable (0 if not specified).
 func (kss *KubeShareScheduler) getOrCreatePodGroupInfo(pod *v1.Pod, ts time.Time) *PodGroupInfo {
-	podGroupName, PodGroupHeadcount, PodGroupThreshold, podMinAvailable := kss.getPodGroupLabels(pod)
+	podGroupName, podGroupHeadcount, podGroupThreshold, podMinAvailable := kss.getPodGroupLabels(pod)
 
 	var pgKey string
 	if len(PodGroupName) > 0 && podMinAvailable > 0 {
@@ -49,10 +48,8 @@ func (kss *KubeShareScheduler) getOrCreatePodGroupInfo(pod *v1.Pod, ts time.Time
 	kss.podGroupMutex.Lock()
 	defer kss.podGroupMutex.Unlock()
 	// If it is a PodGroup and present in PodGroupInfos, return it.
-	if len(pgKey) != 0 {
-
-		pgInfo, exist := kss.podGroupInfos[pgKey]
-		if exist {
+	if pgKey != "" {
+		if pgInfo, ok := kss.podGroupInfos[pgKey]; ok {
 			// If the deleteTimestamp isn't nil,
 			// it means that the PodGroup is marked as expired before.
 			// So we need to set the deleteTimestamp as nil again to mark the PodGroup active.
@@ -73,20 +70,20 @@ func (kss *KubeShareScheduler) getOrCreatePodGroupInfo(pod *v1.Pod, ts time.Time
 		priority:     priority, // podutil.GetPodPriority(pod) + kss.getPodPrioriy(pod)
 		timestamp:    ts,
 		minAvailable: podMinAvailable,
-		headCount: PodGroupHeadcount, 
-		threshold: PodGroupThreshold,
+		headCount:    podGroupHeadcount,
+		threshold:    podGroupThreshold,
 	}
 	// If it's not a regular Pod, store the PodGroup in PodGroupInfos
-	if len(pgKey) > 0 {
+	if pgKey != "" {
 		kss.podGroupInfos[pgKey] = pgInfo
 	}
 	return pgInfo
 }
 
 // checks if the pod belongs to a PodGroup.
-// If so,  it will return the podGroupName, headcount, threshold,  minAvailable.
+// If so,  it will return the podGroupName, headcount, threshold, minAvailable.
 // If not, it will return "" and 0.
-func (kss *KubeShareScheduler) getPodGroupLabels(pod *v1.Pod) (string, int,  float64, int) {
+func (kss *KubeShareScheduler) getPodGroupLabels(pod *v1.Pod) (string, int, float64, int) {
 	podGroupName, ok := pod.Labels[PodGroupName]
 	if !ok || len(podGroupName) == 0 {
 		return "", 0, 0.0, 0
@@ -114,8 +111,7 @@ func (kss *KubeShareScheduler) getPodGroupLabels(pod *v1.Pod) (string, int,  flo
 		return "", 0, 0.0, 0
 	}
 
-
-	minAvailable := int(math.Floor(thres*float64(headcnt)+0.5))
+	minAvailable := int(math.Floor(thres*float64(headcnt) + 0.5))
 
 	return podGroupName, headcnt, thres, minAvailable
 }
@@ -126,11 +122,8 @@ func (kss *KubeShareScheduler) podGroupInfoGC() {
 
 	for key, pgInfo := range kss.podGroupInfos {
 		if pgInfo.deletionTimestamp != nil && pgInfo.deletionTimestamp.Add(time.Duration(kss.args.PodGroupExpirationTimeSeconds)*time.Second).Before(kss.clock.Now()) {
-
 			kss.ksl.Warn(key, " is out of date and has been deleted in PodGroup GarbegeCollection")
 			delete(kss.podGroupInfos, key)
-
 		}
 	}
-
 }

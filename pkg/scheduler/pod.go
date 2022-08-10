@@ -74,7 +74,6 @@ func (kss *KubeShareScheduler) addPod(obj interface{}) {
 		}
 		kss.ksl.Infof("[Sync Resource] add pod %v/%v(%v) to bound queue", pod.Namespace, pod.Name, pod.UID)
 		kss.boundPodQueue[pod.Spec.NodeName].Enqueue(pod)
-
 	}
 }
 
@@ -325,7 +324,6 @@ func (kss *KubeShareScheduler) getPodLabels(pod *v1.Pod) (string, bool, *PodStat
 
 	kss.podStatus[key] = ps
 	return "", true, ps
-
 }
 
 // delete pod status by namespace/name of pod
