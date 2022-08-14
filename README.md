@@ -13,6 +13,7 @@ KubeShare 2.0 is designed in the way of the scheduling framework.
 * Only support a kubernetes cluster that uses the environment variable `NVIDIA_VISIBLE_DEVICES` to control which GPUs will be made accessible inside the container.
 * You also ensures that the *prometheus* is installed, because we will pull the data from it.
 * It can't compatible with other scheduler to manage gpu resource
+* Go version >= v1.16
 * Only tested with Kuberenetes v1.18.10
 
 
