@@ -1,24 +1,30 @@
 module KubeShare
 
-go 1.15
+go 1.16
 
 require (
 	github.com/NVIDIA/go-nvml v0.11.6-0
-	github.com/NVIDIA/gpu-monitoring-tools v0.0.0-20210817155834-f476d8a022cf
 	github.com/fsnotify/fsnotify v1.4.9
-	github.com/go-chi/chi v1.5.4
+	github.com/golang/groupcache v0.0.0-20190129154638-5b532d6fd5ef // indirect
+	github.com/googleapis/gnostic v0.3.1 // indirect
+	github.com/hashicorp/golang-lru v0.5.4 // indirect
+	github.com/imdario/mergo v0.3.9 // indirect
+	github.com/json-iterator/go v1.1.10 // indirect
+	github.com/onsi/gomega v1.10.1 // indirect
 	github.com/prometheus/client_golang v1.0.0
 	github.com/prometheus/common v0.4.1
+	github.com/prometheus/procfs v0.0.11 // indirect
 	github.com/sirupsen/logrus v1.4.2
-	github.com/spf13/cobra v0.0.5
 	github.com/spf13/viper v1.3.2
+	go.uber.org/atomic v1.4.0 // indirect
+	golang.org/x/text v0.3.3 // indirect
+	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect
 	gopkg.in/yaml.v2 v2.3.0
 	k8s.io/api v0.18.10
 	k8s.io/apimachinery v0.18.10
 	k8s.io/client-go v0.18.10
-	k8s.io/klog v1.0.0
 	k8s.io/kubernetes v1.18.10
-	sigs.k8s.io/controller-runtime v0.6.3
+	k8s.io/utils v0.0.0-20200603063816-c1c6865ac451 // indirect
 )
 
 replace k8s.io/api => k8s.io/api v0.18.10
