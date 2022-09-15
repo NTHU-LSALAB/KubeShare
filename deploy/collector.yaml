@@ -52,13 +52,14 @@ spec:
       labels:
         app: kubeshare-collector
     spec:
-            # hostNetwork: true
       nodeSelector:
         SharedGPU: "true"
       containers:
       - name: kubeshare-collector
-        image: riyazhu/kubeshare-collector:db
-        command: ["kubeshare-collector"]
+        image: justin0u0/kubeshare-collector:latest
+        imagePullPolicy: Always
+        command:
+          - kubeshare-collector
         args:
           - --level=3
         ports:
@@ -70,7 +71,6 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
-        imagePullPolicy: Always
         volumeMounts:
         - name: "kubeshare-log"
           mountPath: "/kubeshare/log" 
@@ -78,6 +78,3 @@ spec:
       - name: "kubeshare-log"
         hostPath:
           path: "/kubeshare/log"
-
-
-

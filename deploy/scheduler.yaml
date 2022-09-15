@@ -134,7 +134,7 @@ spec:
       serviceAccountName: kubeshare-scheduler
       containers:
         - name: kubeshare-scheduler
-          image: riyazhu/kubeshare-scheduler:db2 #20210706124950 
+          image: justin0u0/kubeshare-scheduler:latest
           imagePullPolicy: Always
           command: ["kubeshare-scheduler"]
           args:

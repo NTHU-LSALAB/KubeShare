@@ -1,6 +1,6 @@
-CONTAINER_PREFIX?=riyazhu
+CONTAINER_PREFIX?=justin0u0
 CONTAINER_NAME?=kubeshare-collector
-CONTAINER_VERSION?=db
+CONTAINER_VERSION?=latest
 CONTAINER_IMAGE=$(CONTAINER_PREFIX)/$(CONTAINER_NAME):$(CONTAINER_VERSION)
 
 
@@ -36,7 +36,6 @@ kubeshare-gemini-scheduler:
 
 kubeshare-gemini-hook-init:
 	docker build -t $(CONTAINER_IMAGE) -f ./docker/$(CONTAINER_NAME)/Dockerfile . --no-cache
-
 
 build-image:
 	docker build -t $(CONTAINER_IMAGE) -f ./docker/$(CONTAINER_NAME)/Dockerfile . --no-cache

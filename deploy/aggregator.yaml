@@ -87,7 +87,7 @@ spec:
       serviceAccountName: kubeshare-aggregator
       containers:
         - name: kubeshare-aggregator
-          image: riyazhu/kubeshare-aggregator:db #20210706124950 
+          image: justin0u0/kubeshare-aggregator:latest
           imagePullPolicy: Always
           command: ["kubeshare-aggregator"]
           args:

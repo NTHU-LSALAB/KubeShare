@@ -53,7 +53,7 @@ spec:
         effect: NoSchedule
       initContainers:
       - name: kubeshare-query-pod-ip
-        image: riyazhu/kubeshare-query-ip:db
+        image: justin0u0/kubeshare-query-ip:latest
         imagePullPolicy: Always
         env:
         - name: KUBESHARE_SCHEDULER_IP
@@ -74,7 +74,7 @@ spec:
       hostNetwork: true
       containers:
       - name: config
-        image: riyazhu/kubeshare-config:db #20210706124950
+        image: justin0u0/kubeshare-config:latest
         imagePullPolicy: Always
         env:
         - name: NODE_NAME
@@ -112,4 +112,3 @@ spec:
       - name: "kubeshare-log"
         hostPath:
           path: "/kubeshare/log"
-
