@@ -1,4 +1,4 @@
 [submodule "Gemini"]
 	path = Gemini
-	url = https://gitlab.com/geminiopencloud/product-management2/2.-requirements/gpu-sharing/gemini.git
-	branch = develop
+	url = https://github.com/NTHU-LSALAB/Gemini.git
+	branch = v1.0-kubeshare
