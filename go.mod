@@ -9,6 +9,7 @@ require (
 	github.com/googleapis/gnostic v0.3.1 // indirect
 	github.com/hashicorp/golang-lru v0.5.4 // indirect
 	github.com/imdario/mergo v0.3.9 // indirect
+	github.com/jessevdk/go-flags v1.5.0
 	github.com/json-iterator/go v1.1.10 // indirect
 	github.com/onsi/gomega v1.10.1 // indirect
 	github.com/prometheus/client_golang v1.0.0
