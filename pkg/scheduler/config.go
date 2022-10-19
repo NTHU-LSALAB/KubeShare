@@ -37,7 +37,7 @@ type CellSpec struct {
 func (kss *KubeShareScheduler) initRawConfig() *Config {
 	var c Config
 
-	configPath := kss.args.kubeShareConfig
+	configPath := kss.args.KubeShareConfig
 	// convert raw data to yaml
 	yamlBytes, err := os.ReadFile(configPath)
 	if err != nil {
@@ -120,7 +120,7 @@ func inferCellSpec(spec *CellSpec, cellTypes map[string]CellTypeSpec, cellType s
 }
 
 func (kss *KubeShareScheduler) watchConfig(c *Config) {
-	configPath := kss.args.kubeShareConfig
+	configPath := kss.args.KubeShareConfig
 	v := viper.New()
 	v.SetConfigFile(configPath)
 	v.WatchConfig()

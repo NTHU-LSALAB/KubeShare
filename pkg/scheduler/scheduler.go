@@ -57,17 +57,17 @@ var (
 
 type Args struct {
 	// kubernetes
-	masterURL  string `json:"master,omitempty"`
-	kubeConfig string `json:"kubeconfig,omitempty"`
+	MasterURL  string `json:"master,omitempty"`
+	KubeConfig string `json:"kubeconfig,omitempty"`
 
 	// prometheus
-	prometheusURL string `json:"prometheusURL,omitempty"`
+	PrometheusURL string `json:"prometheusURL,omitempty"`
 
 	// gpu topology configration
-	kubeShareConfig string `json:"kubeShareConfig,omitempty"`
+	KubeShareConfig string `json:"kubeShareConfig,omitempty"`
 
 	// logger
-	level int64 `json:"level,omitempty"`
+	Level int64 `json:"level,omitempty"`
 
 	// PermitWaitingTimeBaseSeconds is the base wait timeout in seconds.
 	PermitWaitingTimeBaseSeconds int64 `json:"permitWaitingBaseTimeSeconds"`
@@ -115,9 +115,9 @@ func New(config *runtime.Unknown, handle framework.FrameworkHandle) (framework.P
 
 	// defaulting argument
 	args := &Args{
-		level:                         3, // the default level is debugging mode
-		prometheusURL:                 "http://prometheus-k8s.monitoring:9090",
-		kubeShareConfig:               configPath,
+		Level:                         3, // the default level is debugging mode
+		PrometheusURL:                 "http://prometheus-k8s.monitoring:9090",
+		KubeShareConfig:               configPath,
 		PermitWaitingTimeBaseSeconds:  PermitWaitingTimeBaseSeconds,
 		PodGroupGCIntervalSeconds:     PodGroupGCIntervalSeconds,
 		PodGroupExpirationTimeSeconds: PodGroupExpirationTimeSeconds,
@@ -128,11 +128,11 @@ func New(config *runtime.Unknown, handle framework.FrameworkHandle) (framework.P
 	}
 
 	// logger
-	ksl := logger.New(args.level, logPath)
+	ksl := logger.New(args.Level, logPath)
 
 	// prometheus
 	client, err := api.NewClient(api.Config{
-		Address: args.prometheusURL,
+		Address: args.PrometheusURL,
 	})
 	if err != nil {
 		ksl.Printf("Error creating client: %v\n", err)
