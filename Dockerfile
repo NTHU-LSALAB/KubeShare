@@ -1,4 +1,7 @@
-FROM alpine:3.16 AS base
+FROM debian:stretch-slim
+
+ENV NVIDIA_VISIBLE_DEVICES      all
+ENV NVIDIA_DRIVER_CAPABILITIES  utility
 
 COPY bin/kubeshare /kubeshare
 
