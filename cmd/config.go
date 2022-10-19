@@ -18,10 +18,10 @@ import (
 )
 
 type configArgs struct {
-	PrometheusURL string `long:"prometheusURL" description:"The address of the prometheus" required:"true"`
-	MasterURL     string `long:"master" description:"The address of the kubernetes API server. Overrides any value in kubeconfig. Only required if out-of-cluster."`
-	KubeConfig    string `long:"kubeconfig" description:"Path to a kubeconfig. Only requried if out-of-cluster."`
-	LogLevel      int64  `long:"level" description:"The level order of log." default:"2"`
+	PrometheusAddr string `env:"PROMETHEUS_ADDR" description:"The address of the prometheus" required:"true"`
+	MasterURL      string `env:"MASTER_URL" description:"The address of the kubernetes API server. Overrides any value in kubeconfig. Only required if out-of-cluster."`
+	KubeConfig     string `env:"KUBE_CONFIG" description:"Path to a kubeconfig. Only requried if out-of-cluster."`
+	LogLevel       int64  `env:"LOG_LEVEL" description:"The level order of log." default:"2"`
 }
 
 func runConfig(_ *cobra.Command, _ []string) error {
@@ -35,7 +35,7 @@ func runConfig(_ *cobra.Command, _ []string) error {
 	ksl := logger.New(args.LogLevel, logPath)
 
 	client, err := api.NewClient(api.Config{
-		Address: args.PrometheusURL,
+		Address: args.PrometheusAddr,
 	})
 	if err != nil {
 		ksl.Printf("Error creating client: %v\n", err)

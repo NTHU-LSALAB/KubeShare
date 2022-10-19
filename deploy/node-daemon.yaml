@@ -78,17 +78,18 @@ spec:
       - name: config
         image: ghcr.io/nthu-lsalab/kubeshare:latest
         imagePullPolicy: Always
+        command:
+          - kubeshare
+          - config
         env:
         - name: NODE_NAME
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
-        command:
-          - /kubeshare
-          - config
-        args:
-          - --level=3
-          - --prometheusURL=http://10.100.132.133:9090
+        - name: LOG_LEVEL
+          value: "3"
+        - name: PROMETHEUS_ADDR
+          value: http://prometheus-k8s.monitoring.svc.cluster.local:9090
         volumeMounts:
         - name: "kubeshare-scheduler"
           mountPath: "/kubeshare/scheduler"

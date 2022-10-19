@@ -139,8 +139,6 @@ spec:
           command:
             - kubeshare
             - scheduler
-          args:
-            - --config=/scheduler/scheduler-config.yaml
           resources:
             requests:
               cpu: "50m"

@@ -14,9 +14,9 @@ import (
 )
 
 type collectorArgs struct {
-	Port        string `long:"web.listen-port" description:"An port to listen on for web interface and telemetry." default:"9004"`
-	MetricsPath string `long:"web.telemetry-path" description:"A path which to expose metrics." default:"/kubeshare-collector"`
-	LogLevel    int64  `long:"level" description:"The level order of log." default:"2"`
+	MetricsPort string `env:"METRICS_PORT" description:"An port to listen on for web interface and telemetry." default:"9004"`
+	MetricsPath string `env:"METRICS_PATH" description:"A path which to expose metrics." default:"/kubeshare-collector"`
+	LogLevel    int64  `env:"LOG_LEVEL" description:"The level order of log." default:"2"`
 }
 
 func runCollector(_ *cobra.Command, _ []string) error {
@@ -51,8 +51,8 @@ func runCollector(_ *cobra.Command, _ []string) error {
 	// expose the registered metrics via HTTP
 	http.Handle(args.MetricsPath, promhttp.HandlerFor(registry, promhttp.HandlerOpts{}))
 
-	ksl.Infof("Starting Server at http://localhost:%s%s", args.Port, args.MetricsPath)
-	ksl.Fatal(http.ListenAndServe(":"+args.Port, nil))
+	ksl.Infof("Starting Server at http://localhost:%s%s", args.MetricsPort, args.MetricsPath)
+	ksl.Fatal(http.ListenAndServe(":"+args.MetricsPort, nil))
 
 	return nil
 }

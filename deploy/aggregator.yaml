@@ -92,8 +92,6 @@ spec:
           command:
             - kubeshare
             - aggregator
-          args:
-            - --level=3
           ports:
           - name: aggregator
             containerPort: 9005
@@ -106,6 +104,8 @@ spec:
             valueFrom:
               fieldRef:
                 fieldPath: spec.nodeName
+          - name: LOG_LEVEL
+            value: "3"
       volumes:
         - name: "kubeshare-log"
           hostPath:

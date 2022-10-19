@@ -61,8 +61,6 @@ spec:
         command:
           - kubeshare
           - collector
-        args:
-          - --level=3
         ports:
           - name: collector
             containerPort: 9004
@@ -72,6 +70,8 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
+        - name: LOG_LEVEL
+          value: "3"
         volumeMounts:
         - name: "kubeshare-log"
           mountPath: "/kubeshare/log" 
