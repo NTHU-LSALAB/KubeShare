@@ -137,7 +137,7 @@ spec:
           image: ghcr.io/nthu-lsalab/kubeshare:latest
           imagePullPolicy: Always
           command:
-            - /kubeshare
+            - kubeshare
             - scheduler
           args:
             - --config=/scheduler/scheduler-config.yaml

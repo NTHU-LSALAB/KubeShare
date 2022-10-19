@@ -90,7 +90,7 @@ spec:
           image: ghcr.io/nthu-lsalab/kubeshare:latest
           imagePullPolicy: Always
           command:
-            - /kubeshare
+            - kubeshare
             - aggregator
           args:
             - --level=3

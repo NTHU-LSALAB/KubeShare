@@ -55,6 +55,9 @@ spec:
       - name: kubeshare-query-pod-ip
         image: ghcr.io/nthu-lsalab/kubeshare:latest
         imagePullPolicy: Always
+        command:
+          - kubeshare
+          - query-ip
         env:
         - name: KUBESHARE_SCHEDULER_IP
           valueFrom:
