@@ -1,4 +1,6 @@
-# KubeShare 2.0
+# KubeShare
+
+### 🎉🎉 Kubeshare 2.0 is now avaible, version 1.0 will be deprecated            
 
 A topology and heterogeneous resource aware scheduler for fractional GPU allocation in Kubernetes cluster  
 KubeShare 2.0 is designed in the way of the scheduling framework.
