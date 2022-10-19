@@ -3,3 +3,4 @@ docker/vGPUPod/uuid
 doc/yaml/label
 test/*
 deploy/config/*
+.cache/
