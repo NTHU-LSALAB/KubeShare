@@ -45,7 +45,7 @@ jobs:
 
     - name: set latest image tag
       if: github.ref == 'refs/heads/master'
-      run: echo "IMAGE_TAGS=${{env.IMAGE_TAGS}},${{ env.IMAGE_NAME }}:latest" >> ${{ github.env }}
+      run: echo "IMAGE_TAGS=${{ env.IMAGE_TAGS }},${{ env.IMAGE_NAME }}:latest" >> ${{ github.env }}
 
     - name: docker build and push
       uses: docker/build-push-action@v3
