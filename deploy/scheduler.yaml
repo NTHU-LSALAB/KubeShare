@@ -134,9 +134,11 @@ spec:
       serviceAccountName: kubeshare-scheduler
       containers:
         - name: kubeshare-scheduler
-          image: justin0u0/kubeshare-scheduler:latest
+          image: ghcr.io/nthu-lsalab/kubeshare:latest
           imagePullPolicy: Always
-          command: ["kubeshare-scheduler"]
+          command:
+            - /kubeshare
+            - scheduler
           args:
             - --config=/scheduler/scheduler-config.yaml
           resources:

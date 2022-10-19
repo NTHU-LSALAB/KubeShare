@@ -56,10 +56,11 @@ spec:
         SharedGPU: "true"
       containers:
       - name: kubeshare-collector
-        image: justin0u0/kubeshare-collector:latest
+        image: ghcr.io/nthu-lsalab/kubeshare:latest
         imagePullPolicy: Always
         command:
-          - kubeshare-collector
+          - /kubeshare
+          - collector
         args:
           - --level=3
         ports:

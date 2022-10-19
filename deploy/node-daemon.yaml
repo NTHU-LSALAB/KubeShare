@@ -53,7 +53,7 @@ spec:
         effect: NoSchedule
       initContainers:
       - name: kubeshare-query-pod-ip
-        image: justin0u0/kubeshare-query-ip:latest
+        image: ghcr.io/nthu-lsalab/kubeshare:latest
         imagePullPolicy: Always
         env:
         - name: KUBESHARE_SCHEDULER_IP
@@ -71,17 +71,18 @@ spec:
           mountPath: /kubeshare/library  
         - name: "kubeshare-log"
           mountPath: "/kubeshare/log"
-      hostNetwork: true
       containers:
       - name: config
-        image: justin0u0/kubeshare-config:latest
+        image: ghcr.io/nthu-lsalab/kubeshare:latest
         imagePullPolicy: Always
         env:
         - name: NODE_NAME
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
-        command: ["kubeshare-config"]
+        command:
+          - /kubeshare
+          - config
         args:
           - --level=3
           - --prometheusURL=http://10.100.132.133:9090

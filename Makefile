@@ -13,7 +13,7 @@ clean:
 .PHONY: build
 build:
 	@mkdir -p $(BUILD_DIR)
-	$(COMPILE_FLAGS) go build -o $(BUILD_DIR)/cmd ./cmd/.
+	$(COMPILE_FLAGS) go build -o $(BUILD_DIR)/kubeshare ./cmd/.
 
 .PHONY: build-push-image
 build-push-image:

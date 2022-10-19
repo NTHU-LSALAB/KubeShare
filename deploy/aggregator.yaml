@@ -87,9 +87,11 @@ spec:
       serviceAccountName: kubeshare-aggregator
       containers:
         - name: kubeshare-aggregator
-          image: justin0u0/kubeshare-aggregator:latest
+          image: ghcr.io/nthu-lsalab/kubeshare:latest
           imagePullPolicy: Always
-          command: ["kubeshare-aggregator"]
+          command:
+            - /kubeshare
+            - aggregator
           args:
             - --level=3
           ports:
