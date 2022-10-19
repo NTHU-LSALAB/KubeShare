@@ -1,7 +1,6 @@
 package scheduler
 
 import (
-	"KubeShare/pkg/lib/queue"
 	"bytes"
 	"context"
 	"fmt"
@@ -10,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/NTHU-LSALAB/KubeShare/pkg/lib/queue"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -201,9 +202,9 @@ func (kss *KubeShareScheduler) getPodPrioriy(pod *v1.Pod) (string, bool, int32) 
 // check the pod whether it needs gpu or not and its correctness.
 // return value is error message, correctness, pod status
 // there are 3 possible results:
-// 	1. the pod need gpu and it is set correct by user
-// 	2. the pod need gpu and it is set error by user
-// 	3. the pod does not need gpu -> regular pod
+//  1. the pod need gpu and it is set correct by user
+//  2. the pod need gpu and it is set error by user
+//  3. the pod does not need gpu -> regular pod
 func (kss *KubeShareScheduler) getPodLabels(pod *v1.Pod) (string, bool, *PodStatus) {
 	namespace := pod.Namespace
 	name := pod.Name

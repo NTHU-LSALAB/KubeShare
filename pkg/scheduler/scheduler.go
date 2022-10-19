@@ -26,10 +26,10 @@ import (
 	"k8s.io/kubernetes/pkg/scheduler/util"
 
 	// KubeShare
-	"KubeShare/pkg/lib/bitmap"
-	"KubeShare/pkg/lib/queue"
-	"KubeShare/pkg/logger"
-	"KubeShare/pkg/signals"
+	"github.com/NTHU-LSALAB/KubeShare/pkg/lib/bitmap"
+	"github.com/NTHU-LSALAB/KubeShare/pkg/lib/queue"
+	"github.com/NTHU-LSALAB/KubeShare/pkg/logger"
+	"github.com/NTHU-LSALAB/KubeShare/pkg/signals"
 )
 
 const (
@@ -240,10 +240,10 @@ func (kss *KubeShareScheduler) Name() string {
 }
 
 // sort pods in the scheduling queue.
-// 1. compare the priorities of pods
-// 2. compare the initialization timestamps of PodGroups/Pods.
-// 3. compare the keys of PodGroups/Pods,
-//    i.e., if two pods are tied at priority and creation time, the one without podGroup will go ahead of the one with podGroup.
+//  1. compare the priorities of pods
+//  2. compare the initialization timestamps of PodGroups/Pods.
+//  3. compare the keys of PodGroups/Pods,
+//     i.e., if two pods are tied at priority and creation time, the one without podGroup will go ahead of the one with podGroup.
 func (kss *KubeShareScheduler) Less(podInfo1, podInfo2 *framework.PodInfo) bool {
 	kss.ksl.Debugf("[QueueSort] pod1: %v/%v(%v) v.s. pod2: %v/%v(%v)", podInfo1.Pod.Namespace, podInfo1.Pod.Name, podInfo1.Pod.UID, podInfo2.Pod.Namespace, podInfo2.Pod.Name, podInfo2.Pod.UID)
 
@@ -407,11 +407,11 @@ func (kss *KubeShareScheduler) Filter(ctx context.Context, state *framework.Cycl
 	return framework.NewStatus(framework.Unschedulable, msg)
 }
 
-// 1. pod not need gpu:
-// 		if the node without gpu will set score to 100,
-//  	otherwise, 0
-// 2. opportunistic pod
-// 3. guarantee pod
+//  1. pod not need gpu:
+//     if the node without gpu will set score to 100,
+//     otherwise, 0
+//  2. opportunistic pod
+//  3. guarantee pod
 func (kss *KubeShareScheduler) Score(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodeName string) (int64, *framework.Status) {
 	kss.ksl.Infof("[Score] pod: %v/%v(%v) in node %v", pod.Namespace, pod.Name, pod.UID, nodeName)
 
@@ -570,7 +570,7 @@ func (kss *KubeShareScheduler) Permit(ctx context.Context, state *framework.Cycl
 			namespace, groupName, pod.Name, minAvailable, current)
 
 		// TODO Change the timeout to a dynamic value depending on the size of the  `PodGroup`
-		return framework.NewStatus(framework.Wait, ""), time.Duration(kss.args.PermitWaitingTimeBaseSeconds* int64(pgInfo.headCount)) * time.Second
+		return framework.NewStatus(framework.Wait, ""), time.Duration(kss.args.PermitWaitingTimeBaseSeconds*int64(pgInfo.headCount)) * time.Second
 	}
 
 	kss.ksl.Infof("The count of PodGroup %v/%v/%v is up to minAvailable(%d) in Permit: current(%d)",

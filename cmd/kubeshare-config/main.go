@@ -15,9 +15,9 @@ import (
 	promeV1 "github.com/prometheus/client_golang/api/prometheus/v1"
 
 	// KubeShare
-	"KubeShare/pkg/config"
-	"KubeShare/pkg/logger"
-	"KubeShare/pkg/signals"
+	"github.com/NTHU-LSALAB/KubeShare/pkg/config"
+	"github.com/NTHU-LSALAB/KubeShare/pkg/logger"
+	"github.com/NTHU-LSALAB/KubeShare/pkg/signals"
 )
 
 var (

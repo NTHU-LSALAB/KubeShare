@@ -14,11 +14,12 @@ limitations under the License.
 package main
 
 import (
-	"KubeShare/pkg/scheduler"
 	"fmt"
 	"math/rand"
 	"os"
 	"time"
+
+	"github.com/NTHU-LSALAB/KubeShare/pkg/scheduler"
 
 	"k8s.io/kubernetes/cmd/kube-scheduler/app"
 )

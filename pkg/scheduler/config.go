@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"strconv"
 
-	"KubeShare/pkg/lib/queue"
+	"github.com/NTHU-LSALAB/KubeShare/pkg/lib/queue"
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/spf13/viper"

@@ -1,11 +1,11 @@
 package scheduler
 
 import (
-	"KubeShare/pkg/lib/bitmap"
+	"github.com/NTHU-LSALAB/KubeShare/pkg/lib/bitmap"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/cache"
-	// "KubeShare/pkg/lib/stack"
+	// "github.com/NTHU-LSALAB/KubeShare/pkg/lib/stack"
 )
 
 const (

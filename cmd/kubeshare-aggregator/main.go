@@ -13,8 +13,8 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 
 	// KubeShare
-	"KubeShare/pkg/aggregator"
-	"KubeShare/pkg/logger"
+	"github.com/NTHU-LSALAB/KubeShare/pkg/aggregator"
+	"github.com/NTHU-LSALAB/KubeShare/pkg/logger"
 )
 
 var (

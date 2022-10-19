@@ -13,8 +13,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	// KubeShare
-	"KubeShare/pkg/collector"
-	"KubeShare/pkg/logger"
+	"github.com/NTHU-LSALAB/KubeShare/pkg/collector"
+	"github.com/NTHU-LSALAB/KubeShare/pkg/logger"
 )
 
 var (
